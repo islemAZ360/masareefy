@@ -1,0 +1,7 @@
+{
+  "name": "Masareefy",
+  "description": "Smart income and expense manager with AI receipt analysis.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
