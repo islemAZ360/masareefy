@@ -1,5 +1,5 @@
 # Project Code Dump
-Generated: 16/1/2026, 06:32:21
+Generated: 16/1/2026, 06:37:17
 
 ## 🌳 Project Structure
 ```text
@@ -1890,10 +1890,16 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
         {/* Step 0: Welcome Screen */}
         {step === 0 && (
           <GlassCard className="w-full max-w-sm animate-in fade-in zoom-in duration-700">
-            <div className="w-24 h-24 bg-gradient-to-tr from-sber-green to-emerald-600 rounded-[2rem] flex items-center justify-center mb-8 mx-auto shadow-[0_20px_40px_-10px_rgba(33,160,56,0.4)] relative">
-              <div className="absolute inset-0 bg-white/20 rounded-[2rem] blur-xl opacity-50 animate-pulse"></div>
-              <Wallet className="text-white w-10 h-10 relative z-10" />
+            {/* UPDATED: Using app.png directly instead of generic Wallet icon */}
+            <div className="relative w-28 h-28 mx-auto mb-8">
+               <div className="absolute inset-0 bg-sber-green/20 blur-2xl rounded-full animate-pulse"></div>
+               <img 
+                 src="/app.png" 
+                 alt="Masareefy" 
+                 className="relative z-10 w-full h-full object-contain drop-shadow-2xl hover:scale-105 transition-transform duration-500 rounded-[2rem]"
+               />
             </div>
+            
             <h1 className="text-4xl font-bold mb-3 tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-white to-gray-400">{t.welcome}</h1>
             <p className="text-zinc-400 mb-10 text-base font-light">{t.setup_title}</p>
             
@@ -4865,5 +4871,5 @@ export default defineConfig(({ mode }) => {
 
 ## 📊 Stats
 - Total Files: 26
-- Total Characters: 220599
-- Estimated Tokens: ~55.150 (GPT-4 Context)
+- Total Characters: 220732
+- Estimated Tokens: ~55.183 (GPT-4 Context)
