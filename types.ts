@@ -1,19 +1,22 @@
 export type Language = 'en' | 'ar' | 'ru';
-export type Currency = 'USD' | 'SAR' | 'RUB' | 'AED';
+export type Currency = 'USD' | 'SAR' | 'RUB' | 'AED' | 'EGP';
 
 export enum TransactionType {
   INCOME = 'income',
   EXPENSE = 'expense'
 }
 
+export type WalletType = 'spending' | 'savings';
+
 export interface Transaction {
   id: string;
   amount: number;
   category: string;
-  date: string; // ISO string
+  date: string; // ISO string YYYY-MM-DD
   vendor?: string;
   note?: string;
   type: TransactionType;
+  wallet: WalletType;
   isRecurring?: boolean;
 }
 
@@ -44,13 +47,26 @@ export interface UserSettings {
   language: Language;
   isOnboarded: boolean;
   isGuest?: boolean;
+  
   // Financial Context
-  currentBalance: number;
+  // Spending Wallet Info
+  spendingBankName: string;
+  spendingBankColor: string;
+  spendingTextColor: string;
+  currentBalance: number; 
+  
+  // Savings Wallet Info
+  savingsBankName: string;
+  savingsBankColor: string;
+  savingsTextColor: string;
+  savingsBalance: number; 
+  
+  // Salary Logic
   lastSalaryDate?: string;
   lastSalaryAmount?: number;
-  nextSalaryDate?: string;
-  nextSalaryAmount?: number;
-  salaryFrequency?: 'monthly' | 'bi-weekly' | 'weekly';
+  salaryInterval?: number; // Days
+  nextSalaryDate?: string; // Calculated
+  
   // Budgeting
   selectedPlan?: PlanType;
   dailyLimit?: number;

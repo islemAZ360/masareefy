@@ -1,16 +1,20 @@
 # Project Code Dump
-Generated: 15/1/2026, 06:00:24
+Generated: 16/1/2026, 03:09:11
 
 ## 🌳 Project Structure
 ```text
 ├── components
+  ├── AddTransactionPage.tsx
   ├── AIAdvisor.tsx
   ├── BudgetPlans.tsx
   ├── Dashboard.tsx
+  ├── Navigation.tsx
   ├── Onboarding.tsx
   ├── RecurringBills.tsx
   ├── Reports.tsx
-  └── TransactionItem.tsx
+  ├── SettingsPage.tsx
+  ├── TransactionItem.tsx
+  └── TransactionsPage.tsx
 ├── services
   ├── firebase.ts
   └── geminiService.ts
@@ -30,12 +34,324 @@ Generated: 15/1/2026, 06:00:24
 
 ## 📄 File Contents
 
+### File: `components\AddTransactionPage.tsx`
+```tsx
+import React, { useState, useRef } from 'react';
+import { ChevronLeft, Camera, Image as ImageIcon, Calendar, Tag, CreditCard, Delete, Check, Wand2, Wallet, PiggyBank, X } from 'lucide-react';
+import { UserSettings, Transaction, TransactionType, WalletType } from '../types';
+import { CATEGORIES, TRANSLATIONS } from '../constants';
+import { analyzeReceipt, parseMagicInput } from '../services/geminiService';
+import * as Icons from 'lucide-react';
+
+interface Props {
+  user: UserSettings;
+  transactions: Transaction[];
+  onSave: (transaction: Transaction, transferAmount?: number) => void;
+  onBack: () => void;
+}
+
+export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave, onBack }) => {
+  const t = TRANSLATIONS[user.language];
+  const [loadingMsg, setLoadingMsg] = useState<string | null>(null);
+  
+  // Form State
+  const [amountStr, setAmountStr] = useState('0');
+  const [type, setType] = useState<TransactionType>(TransactionType.EXPENSE);
+  const [wallet, setWallet] = useState<WalletType>('spending');
+  const [selectedCategory, setSelectedCategory] = useState<string>('food');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [vendor, setVendor] = useState('');
+  const [note, setNote] = useState('');
+  const [showDetails, setShowDetails] = useState(false);
+  
+  // Magic Input State
+  const [showMagicInput, setShowMagicInput] = useState(false);
+  const [magicText, setMagicText] = useState('');
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // --- Helpers ---
+  const handleNumPress = (num: string) => {
+    if (amountStr === '0' && num !== '.') setAmountStr(num);
+    else {
+        if (num === '.' && amountStr.includes('.')) return;
+        if (amountStr.length > 9) return;
+        setAmountStr(prev => prev + num);
+    }
+  };
+
+  const handleDelete = () => {
+    if (amountStr.length === 1) setAmountStr('0');
+    else setAmountStr(prev => prev.slice(0, -1));
+  };
+
+  // --- AI: Scan Receipt ---
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (user.isGuest || !user.apiKey) { alert(t.guest_warning); return; }
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setLoadingMsg(t.analyzing);
+    try {
+      const result = await analyzeReceipt(file, user.apiKey, user.language);
+      setAmountStr(result.amount.toString());
+      setDate(result.date);
+      setVendor(result.vendor);
+      setType(result.type as TransactionType);
+      if (CATEGORIES.some(c => c.id === result.category)) setSelectedCategory(result.category);
+      setShowDetails(true);
+    } catch (err) { alert("Failed to analyze receipt."); } 
+    finally { setLoadingMsg(null); }
+  };
+
+  // --- AI: Magic Input ---
+  const handleMagicAnalysis = async () => {
+      if (!magicText.trim()) return;
+      if (user.isGuest || !user.apiKey) { alert(t.guest_warning); return; }
+
+      setLoadingMsg("Processing text...");
+      try {
+          const result = await parseMagicInput(magicText, user.apiKey, user.language);
+          if (result.amount) setAmountStr(result.amount.toString());
+          if (result.date) setDate(result.date);
+          if (result.vendor) setVendor(result.vendor);
+          if (result.type) setType(result.type);
+          if (result.category && CATEGORIES.some(c => c.id === result.category)) {
+              setSelectedCategory(result.category);
+          }
+          setShowMagicInput(false);
+          setShowDetails(true);
+      } catch (e) { alert("Could not understand text."); }
+      finally { setLoadingMsg(null); }
+  };
+
+  // --- SAVE Logic (The Smart Brain) ---
+  const handleSave = () => {
+    const amountVal = parseFloat(amountStr);
+    if (amountVal <= 0) return;
+    
+    let transferNeeded = 0;
+
+    // 1. SMART AFFORDABILITY CHECK
+    // Only applies if: Expense AND Spending Wallet
+    if (type === TransactionType.EXPENSE && wallet === 'spending') {
+        const currentBal = user.currentBalance || 0;
+        
+        if (amountVal > currentBal) {
+            const deficit = amountVal - currentBal;
+            const savings = user.savingsBalance || 0;
+
+            if (savings >= deficit) {
+                // Suggest Transfer
+                const confirmTransfer = window.confirm(
+                    user.language === 'ar' 
+                    ? `⚠️ رصيد الصرف غير كافٍ!\nينقصك ${deficit.toLocaleString()} ${user.currency}.\n\nهل تريد سحب هذا الفرق تلقائياً من محفظة التجميع لإتمام العملية؟`
+                    : `⚠️ Insufficient Spending Balance!\nYou need ${deficit.toLocaleString()} ${user.currency} more.\n\nAuto-transfer this amount from Savings to proceed?`
+                );
+
+                if (confirmTransfer) {
+                    transferNeeded = deficit;
+                } else {
+                    return; // User cancelled
+                }
+            } else {
+                // Broke Logic
+                alert(user.language === 'ar' ? "عذراً، لا يوجد رصيد كافٍ حتى في التجميع! 💀" : "Critical: Insufficient funds in both wallets. 💀");
+                return;
+            }
+        }
+    }
+
+    const newTx: Transaction = {
+      id: Date.now().toString(),
+      amount: amountVal,
+      date: date,
+      category: selectedCategory,
+      vendor: vendor || (type === 'income' ? 'Deposit' : 'Unknown'),
+      note: note,
+      type: type,
+      wallet: wallet,
+      isRecurring: false
+    };
+    
+    onSave(newTx, transferNeeded);
+  };
+
+  return (
+    <div className="flex flex-col h-[90vh] pb-6 relative">
+      
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+          <button onClick={onBack} className="p-2 bg-white/5 rounded-full hover:bg-white/10">
+              <ChevronLeft className="text-white" />
+          </button>
+          
+          {/* Type Segmented Control */}
+          <div className="bg-[#1C1C1E] p-1 rounded-xl flex border border-white/10">
+              <button 
+                onClick={() => setType(TransactionType.EXPENSE)}
+                className={`px-6 py-2 rounded-lg text-xs font-bold transition-all ${type === 'expense' ? 'bg-white text-black shadow-lg' : 'text-gray-500'}`}
+              >
+                {t.expense}
+              </button>
+              <button 
+                onClick={() => setType(TransactionType.INCOME)}
+                className={`px-6 py-2 rounded-lg text-xs font-bold transition-all ${type === 'income' ? 'bg-sber-green text-white shadow-lg' : 'text-gray-500'}`}
+              >
+                {t.income}
+              </button>
+          </div>
+          <div className="w-10" /> 
+      </div>
+
+      {loadingMsg ? (
+         <div className="flex-1 flex flex-col items-center justify-center animate-pulse">
+             <div className="w-24 h-24 bg-sber-green/10 rounded-full flex items-center justify-center border border-sber-green mb-6 relative">
+                 <div className="absolute inset-0 rounded-full border-4 border-sber-green border-t-transparent animate-spin"></div>
+                 <Wand2 className="w-10 h-10 text-sber-green" />
+             </div>
+             <p className="font-bold text-sber-green text-lg tracking-wide">{loadingMsg}</p>
+         </div>
+      ) : showMagicInput ? (
+         <div className="flex-1 px-4 flex flex-col justify-center animate-in zoom-in-95">
+             <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Wand2 className="text-purple-400" /> Magic Input
+                </h3>
+                <button onClick={() => setShowMagicInput(false)} className="p-2 bg-white/5 rounded-full"><X size={16} /></button>
+             </div>
+             <textarea 
+                value={magicText}
+                onChange={e => setMagicText(e.target.value)}
+                className="w-full h-40 bg-[#1C1C1E] rounded-[1.5rem] p-5 text-white border border-white/10 focus:border-purple-500 outline-none resize-none mb-6 text-lg placeholder-zinc-600"
+                placeholder="Ex: Spent 150 on Groceries at Lulu..."
+                autoFocus
+             />
+             <button onClick={handleMagicAnalysis} className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-lg shadow-lg shadow-purple-600/20 active:scale-95 transition-transform">
+                 Analyze Text
+             </button>
+         </div>
+      ) : (
+         <>
+            {/* Amount & Wallet Display */}
+            <div className="flex-1 flex flex-col items-center justify-center min-h-[140px]">
+                <div className="flex items-baseline gap-1 mb-6 animate-in zoom-in duration-300">
+                    <span className={`text-6xl font-bold tracking-tighter ${type === 'expense' ? 'text-white' : 'text-sber-green'}`}>
+                        {amountStr}
+                    </span>
+                    <span className="text-xl text-zinc-500 font-medium">{user.currency}</span>
+                </div>
+
+                {/* Wallet Selector (Chips) */}
+                <div className="flex gap-2 bg-[#1C1C1E] p-1.5 rounded-2xl border border-white/5">
+                    <button 
+                        onClick={() => setWallet('spending')}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${wallet === 'spending' ? 'bg-zinc-800 border-white/20 text-white shadow-sm' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}
+                    >
+                        <Wallet size={14} /> Spending
+                    </button>
+                    <button 
+                        onClick={() => setWallet('savings')}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${wallet === 'savings' ? 'bg-[#0f2e1b] border-sber-green/30 text-sber-green shadow-sm' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}
+                    >
+                        <PiggyBank size={14} /> Savings
+                    </button>
+                </div>
+            </div>
+
+            {/* Categories */}
+            <div className="mb-4">
+                <div className="flex gap-3 overflow-x-auto no-scrollbar px-2 py-2">
+                    {CATEGORIES.map(cat => {
+                        const Icon = (Icons as any)[cat.icon] || Icons.Circle;
+                        const isSelected = selectedCategory === cat.id;
+                        return (
+                            <button
+                                key={cat.id}
+                                onClick={() => setSelectedCategory(cat.id)}
+                                className={`flex flex-col items-center gap-2 min-w-[70px] transition-all duration-300 ${isSelected ? 'scale-110 -translate-y-1' : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0'}`}
+                            >
+                                <div 
+                                    className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg transition-all ${isSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-black' : ''}`}
+                                    style={{ backgroundColor: cat.color }}
+                                >
+                                    <Icon size={24} className="text-white" />
+                                </div>
+                                <span className={`text-[10px] font-bold ${isSelected ? 'text-white' : 'text-zinc-500'}`}>
+                                    {user.language === 'ar' ? cat.name_ar : cat.name_en}
+                                </span>
+                            </button>
+                        )
+                    })}
+                </div>
+            </div>
+
+            {/* Action Bar */}
+            <div className="px-2 mb-2 grid grid-cols-4 gap-2">
+                <button onClick={() => setShowMagicInput(true)} className="col-span-1 bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20 rounded-2xl flex flex-col items-center justify-center text-purple-400 font-bold text-[10px] py-2 transition-colors">
+                    <Wand2 size={18} className="mb-1" /> Magic
+                </button>
+                <button onClick={() => fileInputRef.current?.click()} className="col-span-1 bg-[#1C1C1E] border border-white/5 hover:bg-white/5 rounded-2xl flex flex-col items-center justify-center text-sber-green font-bold text-[10px] py-2 transition-colors">
+                    <Camera size={18} className="mb-1" /> Scan
+                </button>
+                <button onClick={() => setShowDetails(!showDetails)} className="col-span-2 bg-[#1C1C1E] border border-white/5 hover:bg-white/5 rounded-2xl flex items-center justify-center gap-2 text-zinc-300 font-bold text-xs py-2 transition-colors">
+                    <Tag size={16} /> {showDetails ? 'Less Details' : 'Add Note / Vendor'}
+                </button>
+            </div>
+            <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+
+            {/* Details (Collapsible) */}
+            {showDetails && (
+                <div className="bg-[#1C1C1E] mx-2 mb-2 p-3 rounded-2xl border border-white/5 space-y-2 animate-in slide-in-from-top-2">
+                <div className="flex gap-2">
+                    <input type="date" value={date} onChange={e => setDate(e.target.value)} className="bg-black/50 text-white p-3 rounded-xl border border-white/10 text-xs w-1/3 outline-none focus:border-sber-green" />
+                    <input type="text" placeholder="Vendor" value={vendor} onChange={e => setVendor(e.target.value)} className="bg-black/50 text-white p-3 rounded-xl border border-white/10 text-xs w-2/3 outline-none focus:border-sber-green" />
+                </div>
+                <input type="text" placeholder="Note..." value={note} onChange={e => setNote(e.target.value)} className="w-full bg-black/50 text-white p-3 rounded-xl border border-white/10 text-xs outline-none focus:border-sber-green" />
+                </div>
+            )}
+
+            {/* Numpad */}
+            <div className="grid grid-cols-4 gap-2 px-2 pb-2 mt-auto">
+                <div className="col-span-3 grid grid-cols-3 gap-2">
+                    {[1,2,3,4,5,6,7,8,9,'.',0].map(n => (
+                        <button key={n} onClick={() => handleNumPress(n.toString())} className="h-14 bg-[#1C1C1E] rounded-2xl text-xl font-bold text-white hover:bg-white/10 active:scale-95 transition-all">
+                            {n}
+                        </button>
+                    ))}
+                    <button onClick={handleDelete} className="h-14 bg-[#1C1C1E] rounded-2xl flex items-center justify-center text-red-400 hover:bg-red-500/10 active:scale-95 transition-all">
+                        <Delete size={20} />
+                    </button>
+                </div>
+                <div className="col-span-1">
+                    <button 
+                        onClick={handleSave}
+                        disabled={parseFloat(amountStr) === 0}
+                        className={`w-full h-full rounded-2xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95 ${
+                            parseFloat(amountStr) > 0 
+                            ? (type === 'expense' ? 'bg-white text-black shadow-lg shadow-white/20' : 'bg-sber-green text-white shadow-lg shadow-sber-green/20') 
+                            : 'bg-zinc-800 text-zinc-600'
+                        }`}
+                    >
+                        <Check size={28} strokeWidth={3} />
+                        <span className="text-[10px] font-bold uppercase">{t.save}</span>
+                    </button>
+                </div>
+            </div>
+         </>
+      )}
+    </div>
+  );
+};
+```
+---
+
 ### File: `components\AIAdvisor.tsx`
 ```tsx
-import React, { useState } from 'react';
-import { Transaction, UserSettings } from '../types';
+import React, { useState, useEffect } from 'react';
+import { UserSettings, Transaction } from '../types';
 import { getDeepFinancialAnalysis } from '../services/geminiService';
-import { BrainCircuit, Loader2, X, Download, Lock } from 'lucide-react';
+import { BrainCircuit, Loader2, X, Download, Lock, Sparkles, ChevronRight, Bot } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { TRANSLATIONS } from '../constants';
 
@@ -51,10 +367,7 @@ export const AIAdvisor: React.FC<Props> = ({ user, transactions, onClose }) => {
   const t = TRANSLATIONS[user.language];
 
   const generateReport = async () => {
-    // Guest check
-    if (user.isGuest || !user.apiKey) {
-        return;
-    }
+    if (user.isGuest || !user.apiKey) return;
 
     setLoading(true);
     try {
@@ -85,91 +398,114 @@ export const AIAdvisor: React.FC<Props> = ({ user, transactions, onClose }) => {
     document.body.removeChild(link);
   };
 
-  // Trigger generation on mount if not exists and not guest
-  React.useEffect(() => {
+  useEffect(() => {
     if (!report && !user.isGuest) generateReport();
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-xl p-6 overflow-y-auto animate-in fade-in slide-in-from-bottom-10">
-      <div className="max-w-2xl mx-auto mt-10 mb-20">
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-3">
-             <div className="w-12 h-12 bg-sber-green rounded-2xl flex items-center justify-center shadow-lg shadow-sber-green/20">
-                <BrainCircuit className="text-white w-6 h-6" />
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-6">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-black/80 backdrop-blur-xl transition-opacity duration-300" 
+        onClick={onClose}
+      />
+
+      {/* Main Card */}
+      <div className="relative w-full max-w-2xl bg-[#121214] border border-white/10 rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col animate-in slide-in-from-bottom-10 duration-500">
+        
+        {/* Header */}
+        <div className="p-6 border-b border-white/5 flex justify-between items-center bg-[#1C1C1E]/50 sticky top-0 z-20 backdrop-blur-md">
+          <div className="flex items-center gap-4">
+             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/20">
+                <Bot className="text-white w-7 h-7" />
              </div>
              <div>
-               <h2 className="text-2xl font-bold text-white">
-                 {user.language === 'ar' ? 'المستشار المالي الذكي' : user.language === 'ru' ? 'Финансовый советник' : 'AI Financial Advisor'}
+               <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                 {user.language === 'ar' ? 'المستشار المالي' : 'AI Financial Advisor'}
+                 <span className="text-[10px] bg-white/10 text-white px-2 py-0.5 rounded-full border border-white/10 font-mono">BETA</span>
                </h2>
-               <p className="text-xs text-gray-400">Powered by Gemini</p>
+               <p className="text-xs text-gray-400">Powered by Gemini 2.0</p>
              </div>
           </div>
-          <button onClick={onClose} className="p-2 bg-zinc-800 rounded-full hover:bg-zinc-700">
-            <X className="w-6 h-6 text-white" />
+          <button 
+            onClick={onClose} 
+            className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <X size={20} />
           </button>
         </div>
 
-        {user.isGuest ? (
-             <div className="flex flex-col items-center justify-center py-20 space-y-6 text-center">
-                <div className="w-20 h-20 bg-zinc-900 rounded-full flex items-center justify-center border border-zinc-800">
-                    <Lock className="w-10 h-10 text-gray-500" />
+        {/* Content Area */}
+        <div className="overflow-y-auto p-6 scrollbar-hide">
+            {user.isGuest || !user.apiKey ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center space-y-6">
+                    <div className="w-24 h-24 bg-zinc-900 rounded-full flex items-center justify-center border border-zinc-800">
+                        <Lock className="w-10 h-10 text-zinc-600" />
+                    </div>
+                    <div className="max-w-xs mx-auto">
+                        <h3 className="text-xl font-bold text-white mb-2">Feature Locked</h3>
+                        <p className="text-gray-400 text-sm">
+                            {user.language === 'ar' 
+                            ? 'المستشار الذكي يتطلب مفتاح API. يرجى إضافته من الإعدادات.' 
+                            : 'AI Advisor requires a valid Gemini API Key. Please add one in Settings.'}
+                        </p>
+                    </div>
+                    <button 
+                        onClick={onClose}
+                        className="bg-white text-black px-8 py-3 rounded-xl font-bold hover:bg-gray-200 transition-colors"
+                    >
+                        Close
+                    </button>
                 </div>
-                <h3 className="text-xl font-bold text-white">Feature Locked</h3>
-                <p className="text-gray-400 max-w-sm">
-                    {user.language === 'ar' 
-                     ? 'المستشار المالي الذكي يحتاج إلى مفتاح API. يرجى إضافته من الإعدادات.' 
-                     : 'The AI Advisor requires a valid Gemini API Key. Please add one in Settings to unlock this feature.'}
-                </p>
+            ) : loading ? (
+                <div className="flex flex-col items-center justify-center py-24 space-y-8">
+                    <div className="relative">
+                        <div className="w-20 h-20 border-4 border-indigo-500/30 rounded-full animate-spin"></div>
+                        <div className="absolute inset-0 border-4 border-t-indigo-500 rounded-full animate-spin"></div>
+                        <Sparkles className="absolute inset-0 m-auto text-indigo-400 animate-pulse" />
+                    </div>
+                    <p className="text-gray-400 animate-pulse text-sm text-center max-w-xs font-medium">
+                        {user.language === 'ar' 
+                            ? 'جاري تحليل نفقاتك، وكشف الأخطاء، وإعداد خطة احترافية...' 
+                            : 'Analyzing spending patterns, finding leaks, and generating report...'}
+                    </p>
+                </div>
+            ) : (
+                <div className="space-y-6">
+                    <div className={`prose prose-invert prose-p:text-gray-300 prose-headings:text-white prose-strong:text-indigo-400 prose-ul:list-disc prose-li:marker:text-indigo-500 max-w-none ${user.language === 'ar' ? 'text-right' : 'text-left'}`} dir={user.language === 'ar' ? 'rtl' : 'ltr'}>
+                        <ReactMarkdown
+                            components={{
+                                h1: ({node, ...props}) => <h1 className="text-2xl font-bold text-white mb-6 pb-4 border-b border-white/10 flex items-center gap-2" {...props} />,
+                                h2: ({node, ...props}) => <div className="mt-8 mb-4 flex items-center gap-3"><div className="w-1 h-6 bg-indigo-500 rounded-full"></div><h2 className="text-lg font-bold text-white m-0" {...props} /></div>,
+                                ul: ({node, ...props}) => <ul className="bg-[#1C1C1E] p-5 rounded-2xl border border-white/5 space-y-2 my-4" {...props} />,
+                                li: ({node, ...props}) => <li className="text-sm text-gray-300 pl-2" {...props} />,
+                                strong: ({node, ...props}) => <strong className="text-indigo-300 font-bold" {...props} />,
+                            }}
+                        >
+                            {report || ''}
+                        </ReactMarkdown>
+                    </div>
+                </div>
+            )}
+        </div>
+
+        {/* Footer Actions */}
+        {!loading && report && (
+            <div className="p-6 border-t border-white/5 bg-[#1C1C1E]/80 backdrop-blur-md flex gap-4">
                 <button 
-                  onClick={onClose}
-                  className="bg-zinc-800 text-white px-6 py-3 rounded-xl font-bold hover:bg-zinc-700"
+                    onClick={handleDownload}
+                    className="flex-1 bg-[#2C2C2E] hover:bg-[#3A3A3C] text-white font-bold py-4 rounded-xl border border-white/5 flex items-center justify-center gap-2 transition-all active:scale-95"
                 >
-                  Close
+                    <Download size={18} />
+                    {t.download_report}
                 </button>
-             </div>
-        ) : loading ? (
-          <div className="flex flex-col items-center justify-center py-20 space-y-6">
-            <Loader2 className="w-16 h-16 text-sber-green animate-spin" />
-            <p className="text-gray-400 animate-pulse text-center max-w-xs">
-              {user.language === 'ar' 
-                ? 'جاري تحليل نفقاتك، وكشف الأخطاء، وإعداد خطة احترافية...' 
-                : 'Analyzing your spending patterns, finding mistakes, and generating a professional report...'}
-            </p>
-          </div>
-        ) : (
-          <div className="bg-sber-card border border-zinc-800 rounded-3xl p-6 shadow-2xl">
-            <div className={`prose prose-invert prose-p:text-gray-300 prose-headings:text-white prose-strong:text-sber-green max-w-none ${user.language === 'ar' ? 'text-right' : 'text-left'}`} dir={user.language === 'ar' ? 'rtl' : 'ltr'}>
-                <ReactMarkdown
-                   components={{
-                      h1: ({node, ...props}) => <h1 className="text-2xl font-bold text-sber-green mb-4 border-b border-zinc-700 pb-2" {...props} />,
-                      h2: ({node, ...props}) => <h2 className="text-xl font-bold text-white mt-8 mb-4 flex items-center gap-2 before:content-['•'] before:text-sber-green" {...props} />,
-                      h3: ({node, ...props}) => <h3 className="text-lg font-semibold text-gray-200 mt-4 mb-2" {...props} />,
-                      ul: ({node, ...props}) => <ul className="list-disc list-inside space-y-2 text-gray-300 bg-zinc-900/50 p-4 rounded-xl border border-zinc-800" {...props} />,
-                      li: ({node, ...props}) => <li className="marker:text-sber-green" {...props} />,
-                      strong: ({node, ...props}) => <strong className="text-sber-green font-bold bg-sber-green/10 px-1 rounded" {...props} />,
-                   }}
+                <button 
+                    onClick={onClose}
+                    className="flex-1 bg-white text-black hover:bg-gray-200 font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95"
                 >
-                  {report || ''}
-                </ReactMarkdown>
+                    {t.close_report}
+                </button>
             </div>
-            
-            <div className="flex gap-4 mt-8">
-              <button 
-                  onClick={handleDownload}
-                  className="flex-1 flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-4 rounded-xl border border-zinc-700"
-              >
-                  <Download className="w-5 h-5" />
-                  {t.download_report}
-              </button>
-              <button 
-                  onClick={onClose}
-                  className="flex-1 bg-sber-green hover:bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-sber-green/20"
-              >
-                  {t.close_report}
-              </button>
-            </div>
-          </div>
         )}
       </div>
     </div>
@@ -296,12 +632,10 @@ export const BudgetPlans: React.FC<Props> = ({ user, onSelectPlan }) => {
 
 ### File: `components\Dashboard.tsx`
 ```tsx
-import React from 'react';
-import { UserSettings, Transaction, TransactionType, BudgetPlan } from '../types';
+import React, { useState, useEffect } from 'react';
+import { UserSettings, Transaction, TransactionType, BudgetPlan, WalletType } from '../types';
 import { TRANSLATIONS } from '../constants';
-import { Wallet, ArrowUpRight, BrainCircuit, TrendingUp, TrendingDown, Lock } from 'lucide-react';
-import { TransactionItem } from './TransactionItem';
-import { BudgetPlans } from './BudgetPlans';
+import { Wallet, ArrowUpRight, ArrowDownLeft, Sparkles, TrendingUp, CalendarClock, ChevronRight, Zap, PiggyBank, Skull, AlertTriangle, Repeat } from 'lucide-react';
 import { RecurringBills } from './RecurringBills';
 
 interface Props {
@@ -317,162 +651,314 @@ interface Props {
 
 export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, onOpenAI, onChangeView, onPayBill, onAddBill, onDeleteBill }) => {
   const t = TRANSLATIONS[user.language];
+  const [activeCard, setActiveCard] = useState<WalletType>('spending');
 
+  // --- Logic: Financial Health ---
   const transactionsAfterSnapshot = transactions.filter(t => !t.id.startsWith('init-'));
-  const incomeDiff = transactionsAfterSnapshot.filter(t => t.type === TransactionType.INCOME).reduce((s, t) => s + Number(t.amount), 0);
-  const expenseDiff = transactionsAfterSnapshot.filter(t => t.type === TransactionType.EXPENSE).reduce((s, t) => s + Number(t.amount), 0);
   
-  const displayBalance = (user.currentBalance || 0) + incomeDiff - expenseDiff;
+  // Calculate Wallet Balances
+  const calcBalance = (w: WalletType, initial: number) => {
+      const inc = transactionsAfterSnapshot.filter(t => t.wallet === w && t.type === 'income').reduce((s, t) => s + t.amount, 0);
+      const exp = transactionsAfterSnapshot.filter(t => t.wallet === w && t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+      return initial + inc - exp;
+  };
 
-  // Plan Progress Calculation
-  const todayStr = new Date().toISOString().split('T')[0];
-  const todaySpent = transactions
-    .filter(t => t.type === TransactionType.EXPENSE && t.date.startsWith(todayStr))
-    .reduce((sum, t) => sum + Number(t.amount), 0);
+  const spendingBalance = calcBalance('spending', user.currentBalance || 0);
+  const savingsBalance = calcBalance('savings', user.savingsBalance || 0);
+
+  // --- Logic: Salary Countdown ---
+  const calculateDaysToSalary = () => {
+      if (!user.lastSalaryDate || !user.salaryInterval) return null;
+      const last = new Date(user.lastSalaryDate);
+      const next = new Date(last);
+      next.setDate(last.getDate() + user.salaryInterval);
+      
+      const today = new Date();
+      const diffTime = next.getTime() - today.getTime();
+      const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return { days: days > 0 ? days : 0, nextDate: next, totalInterval: user.salaryInterval };
+  };
+  const salaryData = calculateDaysToSalary();
+
+  // --- Logic: Burn Rate & Doom Alert ---
+  const calculateBurnRate = () => {
+      // Analyze last 10 days of spending
+      const today = new Date();
+      const tenDaysAgo = new Date(today.getTime() - 10 * 24 * 60 * 60 * 1000);
+      const recentSpent = transactions
+        .filter(t => t.type === 'expense' && t.wallet === 'spending' && new Date(t.date) >= tenDaysAgo)
+        .reduce((s, t) => s + t.amount, 0);
+      
+      const dailyBurn = recentSpent / 10 || 0;
+      if (dailyBurn === 0) return null;
+
+      const daysToZero = spendingBalance / dailyBurn;
+      return { dailyBurn, daysToZero };
+  };
+  const burnStats = calculateBurnRate();
+
+  // --- Logic: Subscription Detective ---
+  const findPossibleSubscriptions = () => {
+      // Simple heuristic: Same amount repeated > 1 time
+      const counts: Record<number, number> = {};
+      transactions.filter(t => t.type === 'expense').forEach(t => {
+          counts[t.amount] = (counts[t.amount] || 0) + 1;
+      });
+      const subAmount = Object.keys(counts).find(k => counts[Number(k)] > 1 && Number(k) > 0);
+      return subAmount ? Number(subAmount) : null;
+  };
+  const detectedSub = findPossibleSubscriptions();
+
+
+  // --- Greeting ---
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
+
+  // --- UI Components ---
   
-  const dailyLimit = user.dailyLimit || 0;
-  const progressPercent = dailyLimit > 0 ? Math.min((todaySpent / dailyLimit) * 100, 100) : 0;
-  const isOverBudget = todaySpent > dailyLimit;
+  const VisaCard = ({ type, balance, bankName, isActive, onClick }: { type: WalletType, balance: number, bankName: string, isActive: boolean, onClick: () => void }) => (
+      <div 
+        onClick={onClick}
+        className={`absolute inset-0 rounded-[2rem] p-6 flex flex-col justify-between transition-all duration-500 cursor-pointer shadow-2xl border border-white/10 overflow-hidden ${
+            isActive 
+            ? 'z-20 scale-100 translate-y-0 opacity-100' 
+            : 'z-10 scale-95 -translate-y-4 opacity-60 hover:opacity-80'
+        } ${type === 'spending' ? 'bg-[#1C1C1E]' : 'bg-[#0f2e1b]'}`}
+      >
+         {/* Noise & Decoration */}
+         <div className="absolute inset-0 opacity-[0.1] mix-blend-overlay" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}></div>
+         {type === 'savings' && <div className="absolute top-0 right-0 w-40 h-40 bg-sber-green/20 blur-[50px] rounded-full"></div>}
+
+         <div className="relative z-10 flex justify-between items-start">
+             <div>
+                <p className="text-zinc-400 text-[10px] font-bold uppercase tracking-widest mb-1">{type === 'spending' ? 'Main Account' : 'Savings Pot'}</p>
+                <h2 className="text-4xl font-extrabold text-white tracking-tighter tabular-nums">
+                    {balance.toLocaleString()} <span className="text-lg text-zinc-500 font-normal">{user.currency}</span>
+                </h2>
+             </div>
+             <div className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md border border-white/10 ${type === 'spending' ? 'bg-white/5' : 'bg-sber-green/20'}`}>
+                 {type === 'spending' ? <Wallet className="text-white w-5 h-5" /> : <PiggyBank className="text-sber-green w-5 h-5" />}
+             </div>
+         </div>
+
+         <div className="relative z-10">
+             <div className="flex justify-between items-end">
+                 <p className="font-mono text-sm text-zinc-400 tracking-wider">**** **** **** {user.apiKey ? user.apiKey.slice(-4) : '1234'}</p>
+                 <p className="font-bold text-white text-sm">{bankName}</p>
+             </div>
+         </div>
+      </div>
+  );
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-6 pb-24">
       
-      {user.isGuest && (
-          <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-2xl flex items-center gap-3">
-              <Lock className="text-yellow-500 w-5 h-5" />
-              <p className="text-xs text-yellow-500 font-medium">
-                  {t.guest_warning}
-              </p>
+      {/* Header */}
+      <div className="flex justify-between items-center px-2 pt-2">
+        <div>
+           <p className="text-zinc-400 text-sm font-medium">{greeting},</p>
+           <h1 className="text-2xl font-bold text-white tracking-tight">{user.name.split(' ')[0]}</h1>
+        </div>
+        <button onClick={() => onChangeView('settings')}>
+           {user.photoURL ? (
+             <img src={user.photoURL} className="w-10 h-10 rounded-full border-2 border-zinc-800" alt="profile" />
+           ) : (
+             <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center border-2 border-zinc-700">
+                <span className="text-sm font-bold text-white">{user.name.charAt(0)}</span>
+             </div>
+           )}
+        </button>
+      </div>
+
+      {/* 1. Stacked Cards Area */}
+      <div className="relative h-[220px] w-full perspective-1000">
+          <VisaCard 
+            type="savings" 
+            balance={savingsBalance} 
+            bankName={user.bankName} 
+            isActive={activeCard === 'savings'} 
+            onClick={() => setActiveCard('savings')}
+          />
+          <VisaCard 
+            type="spending" 
+            balance={spendingBalance} 
+            bankName={user.bankName} 
+            isActive={activeCard === 'spending'} 
+            onClick={() => setActiveCard('spending')}
+          />
+      </div>
+
+      {/* 2. Salary Countdown */}
+      {salaryData && salaryData.days > 0 && (
+          <div className="px-2">
+              <div className="bg-[#1C1C1E] rounded-2xl p-4 border border-white/5 flex items-center gap-4">
+                  <div className="bg-purple-500/10 p-3 rounded-xl">
+                      <CalendarClock className="text-purple-400 w-6 h-6" />
+                  </div>
+                  <div className="flex-1">
+                      <div className="flex justify-between mb-2">
+                          <span className="text-xs font-bold text-gray-400 uppercase">Next Salary</span>
+                          <span className="text-xs font-bold text-white">{salaryData.days} days left</span>
+                      </div>
+                      <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-purple-500 rounded-full transition-all duration-1000" 
+                            style={{ width: `${((salaryData.totalInterval - salaryData.days) / salaryData.totalInterval) * 100}%` }}
+                          />
+                      </div>
+                  </div>
+              </div>
           </div>
       )}
 
-      {/* Balance Card - Premium Design */}
-      <div className="relative overflow-hidden rounded-[2.5rem] p-8 border border-white/10 shadow-[0_20px_50px_-12px_rgba(33,160,56,0.3)] group hover:scale-[1.01] transition-transform duration-300">
-        {/* Animated Gradient Background */}
-        <div className="absolute inset-0 bg-[#0F0F11] z-0"></div>
-        {/* Subtle Noise Texture */}
-        <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}></div>
-        
-        <div className="absolute top-0 right-0 w-64 h-64 bg-sber-green/30 rounded-full blur-[80px] opacity-40"></div>
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-900/40 rounded-full blur-[80px] opacity-40"></div>
+      {/* 3. The Doom Alert (Burn Rate) */}
+      {burnStats && burnStats.daysToZero < 10 && salaryData && salaryData.days > burnStats.daysToZero && (
+          <div className="px-2 animate-bounce-slow">
+              <div className={`rounded-2xl p-4 border flex items-start gap-3 ${user.selectedPlan === 'austerity' ? 'bg-red-900/20 border-red-500/50' : 'bg-yellow-900/20 border-yellow-500/50'}`}>
+                  {user.selectedPlan === 'austerity' ? (
+                      <Skull className="text-red-500 w-6 h-6 shrink-0" />
+                  ) : (
+                      <AlertTriangle className="text-yellow-500 w-6 h-6 shrink-0" />
+                  )}
+                  <div>
+                      <h4 className={`font-bold text-sm ${user.selectedPlan === 'austerity' ? 'text-red-400' : 'text-yellow-400'}`}>
+                          {user.selectedPlan === 'austerity' ? "You are going to die 💀" : "Warning: Funds Low"}
+                      </h4>
+                      <p className="text-xs text-zinc-400 mt-1">
+                          {user.selectedPlan === 'austerity' 
+                            ? `At this rate, you go broke in ${burnStats.daysToZero.toFixed(0)} days. Salary is in ${salaryData.days} days.`
+                            : `You will run out of money in ${burnStats.daysToZero.toFixed(0)} days. Switch to Austerity Plan?`
+                          }
+                      </p>
+                      {user.selectedPlan !== 'austerity' && (
+                          <button 
+                            onClick={() => onSelectPlan({ type: 'austerity', dailyLimit: 50, monthlySavingsProjected: 0, description_en: '', description_ar: '', description_ru: '' })}
+                            className="mt-2 bg-yellow-500 text-black text-[10px] font-bold px-3 py-1.5 rounded-lg"
+                          >
+                              Enable Austerity Mode
+                          </button>
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
 
-        <div className="relative z-10">
-            <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-2">
-                    <div className="bg-white/5 p-2 rounded-full backdrop-blur-sm border border-white/5">
-                         <Wallet className="w-4 h-4 text-gray-300" />
-                    </div>
-                    <p className="text-gray-400 font-medium text-xs tracking-widest uppercase">{t.balance}</p>
-                </div>
-                {/* Status Indicator */}
-                <div className="flex items-center gap-1.5 bg-black/40 px-3 py-1 rounded-full border border-white/5 backdrop-blur-md">
-                    <div className="w-1.5 h-1.5 rounded-full bg-sber-green animate-pulse"></div>
-                    <span className="text-[9px] text-gray-300 font-bold tracking-widest">LIVE</span>
-                </div>
-            </div>
+      {/* 4. Subscription Detective */}
+      {detectedSub && (
+          <div className="px-2">
+              <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-2xl flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                      <Repeat className="text-blue-400 w-5 h-5" />
+                      <div>
+                          <p className="text-xs font-bold text-blue-300">Subscription Detected?</p>
+                          <p className="text-[10px] text-blue-200/60">Transaction of {detectedSub} repeats often.</p>
+                      </div>
+                  </div>
+                  <button className="text-[10px] bg-blue-500 text-white px-3 py-1.5 rounded-lg font-bold">Add Fixed Bill</button>
+              </div>
+          </div>
+      )}
 
-            <h1 className="text-5xl font-bold text-white mb-8 tracking-tighter tabular-nums">
-            {displayBalance.toLocaleString()} <span className="text-2xl font-light text-sber-green opacity-80">{user.currency}</span>
-            </h1>
-            
-            {/* Active Plan Daily Tracker */}
-            {user.selectedPlan && (
-            <div className="mb-6 bg-white/5 backdrop-blur-md p-5 rounded-[1.5rem] border border-white/5">
-                <div className="flex justify-between items-end mb-3">
-                    <div>
-                        <span className="text-[10px] text-gray-400 block mb-1 font-bold uppercase tracking-wide">
-                            {user.language === 'ar' ? 'مصروف اليوم' : 'Daily Allowance'}
-                        </span>
-                        <div className="flex items-baseline gap-2">
-                             <span className={`text-2xl font-bold tabular-nums ${isOverBudget ? 'text-red-400' : 'text-white'}`}>
-                                {todaySpent.toLocaleString()}
-                            </span>
-                            <span className="text-sm text-gray-500 font-medium">/ {dailyLimit}</span>
-                        </div>
-                    </div>
-                    <div className={`text-[10px] font-bold px-3 py-1.5 rounded-lg tracking-wider border ${isOverBudget ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-sber-green/10 text-sber-green border-sber-green/20'}`}>
-                        {isOverBudget ? 'OVER LIMIT' : 'ON TRACK'}
-                    </div>
-                </div>
-                {/* Progress Bar */}
-                <div className="h-1.5 w-full bg-zinc-800/50 rounded-full overflow-hidden">
-                    <div 
-                        className={`h-full transition-all duration-700 ease-out rounded-full ${isOverBudget ? 'bg-red-500' : 'bg-sber-green'}`} 
-                        style={{ width: `${progressPercent}%` }} 
-                    />
-                </div>
-            </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white/5 p-4 rounded-[1.2rem] border border-white/5 flex items-center gap-3 hover:bg-white/10 transition-colors">
-                    <div className="w-10 h-10 rounded-full bg-sber-green/20 flex items-center justify-center">
-                        <TrendingUp className="w-5 h-5 text-sber-green" />
-                    </div>
-                    <div>
-                         <p className="text-[10px] text-gray-400 mb-0.5 uppercase tracking-wide">{t.income}</p>
-                         <p className="font-bold text-white tabular-nums text-sm">+{transactions.filter(t=>t.type==='income').reduce((s,t)=>s+Number(t.amount),0).toLocaleString()}</p>
-                    </div>
-                </div>
-                <div className="bg-white/5 p-4 rounded-[1.2rem] border border-white/5 flex items-center gap-3 hover:bg-white/10 transition-colors">
-                    <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
-                        <TrendingDown className="w-5 h-5 text-red-500" />
-                    </div>
-                    <div>
-                         <p className="text-[10px] text-gray-400 mb-0.5 uppercase tracking-wide">{t.expense}</p>
-                         <p className="font-bold text-white tabular-nums text-sm">-{transactions.filter(t=>t.type==='expense').reduce((s,t)=>s+Number(t.amount),0).toLocaleString()}</p>
-                    </div>
-                </div>
-            </div>
-        </div>
+      {/* Quick Actions */}
+      <div className="grid grid-cols-2 gap-3 px-2">
+          <button 
+             onClick={() => onChangeView('add')}
+             className="bg-[#1C1C1E] p-4 rounded-2xl border border-white/5 flex flex-col items-center gap-2 hover:bg-[#252527] transition-all active:scale-95"
+          >
+             <div className="w-10 h-10 bg-sber-green/10 rounded-full flex items-center justify-center text-sber-green">
+                 <ArrowUpRight size={20} />
+             </div>
+             <span className="text-xs font-bold text-zinc-300">{t.add}</span>
+          </button>
+          
+          <button 
+             onClick={() => onChangeView('transactions')}
+             className="bg-[#1C1C1E] p-4 rounded-2xl border border-white/5 flex flex-col items-center gap-2 hover:bg-[#252527] transition-all active:scale-95"
+          >
+             <div className="w-10 h-10 bg-blue-500/10 rounded-full flex items-center justify-center text-blue-500">
+                 <TrendingUp size={20} />
+             </div>
+             <span className="text-xs font-bold text-zinc-300">History</span>
+          </button>
       </div>
 
       {/* AI Advisor Banner */}
       <button 
         onClick={onOpenAI}
-        className="w-full group bg-gradient-to-r from-sber-green/10 to-transparent p-[1px] rounded-3xl overflow-hidden hover:scale-[1.02] transition-transform duration-300 active:scale-95"
+        className="mx-2 relative group overflow-hidden rounded-[1.5rem] bg-[#1C1C1E] border border-white/5 p-5 flex items-center justify-between hover:bg-[#252527] transition-all"
       >
-         <div className="bg-[#1C1C1E] rounded-[1.4rem] p-5 flex items-center justify-between relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-sber-green/10 blur-[50px] rounded-full"></div>
-            
-            <div className="flex items-center gap-4 relative z-10">
-                <div className="bg-gradient-to-br from-sber-green to-emerald-700 p-3.5 rounded-2xl shadow-lg shadow-sber-green/20 group-hover:rotate-6 transition-transform duration-300">
-                    <BrainCircuit className="text-white w-6 h-6" />
-                </div>
-                <div className="text-left">
-                    <h3 className="font-bold text-white text-sm flex items-center gap-2">
-                        {user.language === 'ar' ? 'تحليل مالي عميق' : 'Deep Financial Analysis'}
-                        <span className="bg-sber-green text-black text-[9px] font-extrabold px-1.5 py-0.5 rounded-md">AI</span>
-                    </h3>
-                    <p className="text-xs text-gray-400 mt-1">
-                        {user.language === 'ar' ? 'احصل على تقرير احترافي' : 'Get a professional Gemini report'}
-                    </p>
-                </div>
+         <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/20">
+                <Zap className="text-white w-6 h-6 fill-current" />
             </div>
-            <div className="bg-zinc-800 p-2 rounded-full group-hover:bg-zinc-700 transition-colors relative z-10">
-                 <ArrowUpRight className="text-gray-400 w-5 h-5 group-hover:text-white" />
+            <div className="text-left">
+                <h3 className="font-bold text-white text-base">AI Analysis</h3>
+                <p className="text-xs text-gray-400">Generate financial report</p>
             </div>
          </div>
+         <ChevronRight className="text-zinc-600" />
       </button>
 
       {/* Recurring Bills */}
-      <RecurringBills user={user} onPayBill={onPayBill} onAddBill={onAddBill} onDeleteBill={onDeleteBill} />
-
-      {/* Budget Plans Selector */}
-      <BudgetPlans user={user} onSelectPlan={onSelectPlan} />
-
-      {/* Recent Txs */}
-      <div>
-        <div className="flex justify-between items-center mb-4 px-2">
-          <h2 className="text-lg font-bold text-white">{t.recent_transactions}</h2>
-          <button onClick={() => onChangeView('transactions')} className="text-sber-green text-xs font-bold uppercase tracking-wider hover:underline">{t.transactions}</button>
-        </div>
-        <div className="space-y-2">
-          {transactions.slice(0, 4).map(tx => (
-            <TransactionItem key={tx.id} transaction={tx} currency={user.currency} language={user.language} />
-          ))}
-        </div>
+      <div className="pt-2 px-2">
+         <div className="flex items-center gap-2 mb-3">
+             <CalendarClock className="w-4 h-4 text-zinc-400" />
+             <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-wider">{t.fixed_bills}</h3>
+         </div>
+         <RecurringBills user={user} onPayBill={onPayBill} onAddBill={onAddBill} onDeleteBill={onDeleteBill} />
       </div>
+
+    </div>
+  );
+};
+```
+---
+
+### File: `components\Navigation.tsx`
+```tsx
+import React from 'react';
+import { Home, List, Plus, PieChart as PieIcon, Settings } from 'lucide-react';
+import { ViewState } from '../types';
+
+interface Props {
+  currentView: ViewState;
+  onNavigate: (view: ViewState) => void;
+}
+
+export const Navigation: React.FC<Props> = ({ currentView, onNavigate }) => {
+  
+  const NavItem = ({ view, icon: Icon }: { view: ViewState; icon: any }) => {
+    const isActive = currentView === view;
+    return (
+      <button 
+        onClick={() => onNavigate(view)}
+        className={`flex flex-col items-center gap-1 transition-all duration-300 group ${isActive ? 'text-white -translate-y-1' : 'text-zinc-500 hover:text-gray-300'}`}
+      >
+        <div className={`absolute -bottom-6 w-1 h-1 rounded-full bg-white transition-all duration-300 ${isActive ? 'opacity-100 scale-100' : 'opacity-0 scale-0'}`}></div>
+        <Icon size={24} strokeWidth={isActive ? 3 : 2} className={`transition-all duration-300 ${isActive ? 'drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : ''}`} />
+      </button>
+    );
+  };
+
+  return (
+    <div className="fixed bottom-8 left-0 right-0 z-50 flex justify-center pointer-events-none">
+       <nav className="bg-[#161618]/90 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] px-8 py-4 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.8)] flex items-center gap-8 pointer-events-auto transition-transform duration-300">
+          
+          <NavItem view="dashboard" icon={Home} />
+          <NavItem view="transactions" icon={List} />
+
+          {/* Central Add Button */}
+          <button 
+              onClick={() => onNavigate('add')}
+              className="w-16 h-16 bg-white text-black rounded-[1.2rem] flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95 transition-all duration-300 -mt-10 border-4 border-[#050505] relative z-20 group"
+          >
+              <Plus size={32} strokeWidth={3} className="group-hover:rotate-90 transition-transform duration-300" />
+          </button>
+
+          <NavItem view="reports" icon={PieIcon} />
+          <NavItem view="settings" icon={Settings} />
+          
+       </nav>
     </div>
   );
 };
@@ -482,140 +968,142 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
 ### File: `components\Onboarding.tsx`
 ```tsx
 import React, { useState, useEffect } from 'react';
-import { UserSettings, Currency, Language, RecurringBill, Transaction, TransactionType } from '../types';
+import { UserSettings, Currency, Language, RecurringBill } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { validateApiKey, analyzeOnboardingData, OnboardingAnalysisResult } from '../services/geminiService';
-import { signInWithGoogle, auth } from '../services/firebase';
-import { Wallet, Check, ImageIcon, DollarSign, Upload, Zap, ArrowRight, Plus, Trash2, UserCircle2, Lock, ChevronLeft, Globe, Key, CheckCircle2, XCircle } from 'lucide-react';
+import { signInWithGoogle, auth, getUserData } from '../services/firebase';
+import { Wallet, Check, ImageIcon, DollarSign, Upload, Zap, ArrowRight, Plus, Trash2, UserCircle2, ChevronLeft, Globe, Key, CheckCircle2, XCircle, Loader2, Building2, PiggyBank, CalendarClock } from 'lucide-react';
 
 interface Props {
   user: UserSettings;
   setUser: React.Dispatch<React.SetStateAction<UserSettings>>;
   onComplete: (result: OnboardingAnalysisResult, nextSalaryDate: string, nextSalaryAmount: number, bills: RecurringBill[]) => void;
+  onRestore: (settings: UserSettings, transactions: any[]) => void;
 }
 
-// Helper: Calendar Grid
-const CalendarGrid = ({ 
-    selectedDate, 
-    onSelectDate 
+// Helper: Smart Calendar Grid
+const SmartCalendar = ({ 
+    lastSalaryDate, 
+    interval 
   }: { 
-    selectedDate: string, 
-    onSelectDate: (d: string) => void 
+    lastSalaryDate: string, 
+    interval: number 
   }) => {
-    const today = new Date();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-    const firstDay = new Date(currentYear, currentMonth, 1).getDay(); // 0 = Sun
+    const lastDate = new Date(lastSalaryDate);
+    const nextDate = new Date(lastDate);
+    nextDate.setDate(lastDate.getDate() + interval);
+    
+    // Generate view based on Next Date month
+    const year = nextDate.getFullYear();
+    const month = nextDate.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDay = new Date(year, month, 1).getDay();
     
     const days = [];
     for (let i = 0; i < firstDay; i++) days.push(null);
     for (let i = 1; i <= daysInMonth; i++) days.push(i);
-  
-    // Next month preview
-    const nextMonthDays = 35 - days.length;
-    for(let i=1; i<= nextMonthDays; i++) days.push(`N-${i}`);
-  
+
     return (
-      <div className="bg-sber-card p-4 rounded-xl border border-zinc-800">
-         <div className="text-center font-bold mb-4 text-white">
-           {today.toLocaleString('default', { month: 'long', year: 'numeric' })}
+      <div className="bg-[#1C1C1E] p-4 rounded-2xl border border-zinc-800 animate-in fade-in zoom-in duration-500">
+         <div className="text-center font-bold mb-4 text-white flex justify-between items-center">
+           <span className="text-xs text-gray-500 uppercase tracking-wider">Next Payday</span>
+           <span>{nextDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
          </div>
          <div className="grid grid-cols-7 gap-1 text-center">
-           {['S','M','T','W','T','F','S'].map(d => <div key={d} className="text-xs text-gray-500 mb-2">{d}</div>)}
+           {['S','M','T','W','T','F','S'].map(d => <div key={d} className="text-[10px] text-zinc-600 font-bold">{d}</div>)}
            {days.map((day, idx) => {
              if (!day) return <div key={idx}></div>;
-             if (typeof day === 'string') return <div key={idx} className="text-gray-700 text-sm py-2">{day.split('-')[1]}</div>;
              
-             const dateStr = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-             const isSelected = selectedDate === dateStr;
+             const isNextPayday = day === nextDate.getDate();
              
              return (
-               <button 
+               <div 
                  key={idx}
-                 onClick={() => onSelectDate(dateStr)}
-                 className={`text-sm py-2 rounded-full transition-colors ${isSelected ? 'bg-sber-green text-white font-bold' : 'text-gray-300 hover:bg-zinc-800'}`}
+                 className={`text-sm py-2 rounded-full flex items-center justify-center transition-all duration-500 ${
+                    isNextPayday 
+                    ? 'bg-sber-green text-white font-bold shadow-[0_0_15px_rgba(33,160,56,0.5)] scale-110' 
+                    : 'text-zinc-500'
+                 }`}
                >
                  {day}
-               </button>
+               </div>
              )
            })}
          </div>
+         <div className="mt-4 text-center">
+             <p className="text-xs text-sber-green font-medium animate-pulse">
+                 Your salary will arrive on {nextDate.toLocaleDateString()}
+             </p>
+         </div>
       </div>
     );
-  };
+};
 
-export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete }) => {
+export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onRestore }) => {
   const t = TRANSLATIONS[user.language];
-  // 0: Auth Selection, 1: Profile Details, 2: Bal, 3: Sal, 4: Exp, 5: Bills, 6: Analyze, 7: Plan
   const [step, setStep] = useState(0); 
   const [isValidating, setIsValidating] = useState(false);
-  
-  // API Key Validation State
+  const [isRestoring, setIsRestoring] = useState(false);
   const [keyStatus, setKeyStatus] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
 
+  // Files
   const [balanceFile, setBalanceFile] = useState<File | null>(null);
   const [salaryFile, setSalaryFile] = useState<File | null>(null);
   const [expenseFiles, setExpenseFiles] = useState<File[]>([]);
-  const [analysisResult, setAnalysisResult] = useState<OnboardingAnalysisResult | null>(null);
   
-  // Recurring Bills State
+  // Data
+  const [analysisResult, setAnalysisResult] = useState<OnboardingAnalysisResult | null>(null);
   const [recurringBills, setRecurringBills] = useState<RecurringBill[]>([]);
   const [newBillName, setNewBillName] = useState('');
   const [newBillAmount, setNewBillAmount] = useState('');
 
-  // Planning State
-  const [plannedNextSalaryDate, setPlannedNextSalaryDate] = useState<string>('');
-  const [plannedNextSalaryAmount, setPlannedNextSalaryAmount] = useState<number>(0);
+  // Salary Logic State
+  const [salaryInterval, setSalaryInterval] = useState<number>(30); // Default 30 days
+  const [savingsInitial, setSavingsInitial] = useState<number>(0);
 
-  // Update text direction when language changes
   useEffect(() => {
     document.documentElement.dir = user.language === 'ar' ? 'rtl' : 'ltr';
   }, [user.language]);
 
-  // Pre-fill API Key from Env if available
   useEffect(() => {
     if (process.env.API_KEY && !user.apiKey) {
       setUser(prev => ({ ...prev, apiKey: process.env.API_KEY || '' }));
     }
   }, []);
 
-  // --- Actions ---
-
-  const toggleLanguage = () => {
-    const nextLang = user.language === 'en' ? 'ar' : user.language === 'ar' ? 'ru' : 'en';
-    setUser(prev => ({ ...prev, language: nextLang }));
-  };
+  // --- Handlers ---
 
   const handleGoogleSignIn = async () => {
-    // Check if auth is initialized before attempting sign-in
-    if (!auth) {
-        alert("Google Sign-In is unavailable because Firebase is not configured.");
-        return;
-    }
-    
+    if (!auth) { alert("Firebase not configured."); return; }
     try {
         const googleUser = await signInWithGoogle();
         if (googleUser) {
-            setUser(prev => ({
-                ...prev,
-                name: googleUser.displayName || prev.name,
-                email: googleUser.email || undefined,
-                photoURL: googleUser.photoURL || undefined,
-                isGuest: false
-            }));
-            setStep(1); // Move to Profile Setup
+            setIsRestoring(true);
+            try {
+                const existingData = await getUserData(googleUser.uid);
+                if (existingData?.settings?.isOnboarded) {
+                    onRestore(existingData.settings, existingData.transactions || []);
+                } else {
+                    setUser(prev => ({
+                        ...prev,
+                        name: googleUser.displayName || prev.name,
+                        email: googleUser.email || undefined,
+                        photoURL: googleUser.photoURL || undefined,
+                        isGuest: false
+                    }));
+                    setStep(1); 
+                }
+            } catch (e: any) {
+                console.error("Firestore Error:", e);
+                // Continue as new user if read fails but auth works
+                setStep(1);
+            }
         }
-    } catch (e) {
-        console.error("Google Sign in failed", e);
-        alert("Google Sign In failed. Please check your internet or configuration.");
+    } catch (e: any) {
+        alert(`Login Failed: ${e.message}`);
+    } finally {
+        setIsRestoring(false);
     }
-  };
-
-  const handleGuestSelect = () => {
-    // Treat "Guest" as manual setup user (Not strictly isGuest=true to allow AI features if key provided)
-    setUser(prev => ({ ...prev, isGuest: false, name: '' })); 
-    setStep(1); // Move to Profile Setup
   };
 
   const checkApiKey = async () => {
@@ -624,50 +1112,28 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete }) => {
     try {
         const isValid = await validateApiKey(user.apiKey.trim());
         setKeyStatus(isValid ? 'valid' : 'invalid');
-    } catch (e) {
-        setKeyStatus('invalid');
-    }
+    } catch { setKeyStatus('invalid'); }
   };
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!user.name.trim()) return alert(t.enter_name);
+    if (!user.name.trim() || !user.bankName.trim()) return alert("Please fill all fields");
     if (!user.apiKey.trim()) return alert(t.enter_key);
     
-    // If already validated, proceed
-    if (keyStatus === 'valid') {
-        setStep(2);
-        return;
-    }
+    if (keyStatus === 'valid') { setStep(2); return; }
     
     setIsValidating(true);
     try {
       const isValid = await validateApiKey(user.apiKey.trim());
       if (isValid) {
         setUser(u => ({ ...u, apiKey: u.apiKey.trim() }));
-        setStep(2); // Move to Balance Upload
+        setStep(2);
       } else {
         setKeyStatus('invalid');
         alert(t.invalid_key_error);
       }
-    } catch { 
-        alert("Error connecting to API"); 
-    } finally { 
-        setIsValidating(false); 
-    }
-  };
-
-  const handleAddBill = () => {
-    if (newBillName && newBillAmount) {
-      setRecurringBills([...recurringBills, {
-        id: Date.now().toString(),
-        name: newBillName,
-        amount: Number(newBillAmount)
-      }]);
-      setNewBillName('');
-      setNewBillAmount('');
-    }
+    } catch { alert("Error connecting to API"); } 
+    finally { setIsValidating(false); }
   };
 
   const handleStartAnalysis = async () => {
@@ -681,172 +1147,125 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete }) => {
         user.language
       );
       setAnalysisResult(result);
-      setPlannedNextSalaryAmount(result.lastSalary.amount);
-      
-      const lastDate = new Date(result.lastSalary.date);
-      let nextDate = new Date(lastDate);
-      if (result.salaryFrequencyInferred === 'monthly') nextDate.setMonth(nextDate.getMonth() + 1);
-      else if (result.salaryFrequencyInferred === 'bi-weekly') nextDate.setDate(nextDate.getDate() + 14);
-      else nextDate.setDate(nextDate.getDate() + 7);
-      
-      setPlannedNextSalaryDate(nextDate.toISOString().split('T')[0]);
       setStep(7);
     } catch (e) {
       console.error(e);
-      alert("Failed to analyze images.");
+      alert("Analysis failed. Please try again.");
       setStep(2);
     }
   };
 
+  const handleFinalize = () => {
+      if (!analysisResult) return;
+      
+      // Calculate Next Date
+      const lastDate = new Date(analysisResult.lastSalary.date);
+      const nextDate = new Date(lastDate);
+      nextDate.setDate(lastDate.getDate() + salaryInterval);
+      const nextSalaryDateStr = nextDate.toISOString().split('T')[0];
+
+      // Update User Context with new fields
+      setUser(u => ({
+          ...u,
+          salaryInterval: salaryInterval,
+          savingsBalance: savingsInitial
+      }));
+
+      onComplete(analysisResult, nextSalaryDateStr, analysisResult.lastSalary.amount, recurringBills);
+  };
+
+  // --- Render ---
+
+  if (isRestoring) {
+      return (
+          <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center text-white">
+              <Loader2 className="w-12 h-12 text-sber-green animate-spin mb-4" />
+              <h2 className="text-xl font-bold">Checking database...</h2>
+          </div>
+      );
+  }
+
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center text-white relative overflow-hidden">
         
-        {/* Language Switcher - Always Visible */}
-        <div className="absolute top-6 right-6 z-50">
-            <button 
-                onClick={toggleLanguage}
-                className="flex items-center gap-2 bg-zinc-900/80 backdrop-blur-md px-4 py-2 rounded-full border border-zinc-800 hover:border-sber-green transition-all shadow-lg active:scale-95"
-            >
-                <Globe className="w-4 h-4 text-sber-green" />
-                <span className="text-sm font-bold uppercase">{user.language}</span>
-            </button>
-        </div>
-
         {/* Step Indicator */}
         {step > 0 && (
-            <div className="absolute top-10 left-0 right-0 flex justify-center gap-2">
+            <div className="absolute top-10 left-0 right-0 flex justify-center gap-2 px-6">
             {[1,2,3,4,5,6,7].map(s => (
-                <div key={s} className={`h-1 rounded-full transition-all duration-300 ${s <= step ? 'w-8 bg-sber-green' : 'w-4 bg-gray-800'}`} />
+                <div key={s} className={`h-1 flex-1 rounded-full transition-all duration-300 ${s <= step ? 'bg-sber-green' : 'bg-zinc-800'}`} />
             ))}
             </div>
         )}
 
-        {/* Step 0: Auth Selection (Landing) */}
+        {/* Step 0: Auth */}
         {step === 0 && (
-          <div className="w-full max-w-sm animate-in fade-in zoom-in duration-500 relative">
+          <div className="w-full max-w-sm animate-in fade-in zoom-in duration-500">
             <div className="w-24 h-24 bg-gradient-to-tr from-sber-green to-emerald-600 rounded-[2rem] flex items-center justify-center mb-8 mx-auto shadow-2xl shadow-sber-green/20">
               <Wallet className="text-white w-12 h-12" />
             </div>
-            <h1 className="text-4xl font-bold mb-3 tracking-tight">{t.welcome}</h1>
-            <p className="text-gray-400 mb-10 text-lg">{t.setup_title}</p>
+            <h1 className="text-4xl font-bold mb-3">{t.welcome}</h1>
+            <p className="text-zinc-400 mb-10 text-lg">{t.setup_title}</p>
             
-            <div className="space-y-4">
-                 {/* Google Sign In */}
-                 <button 
-                    onClick={handleGoogleSignIn}
-                    className="w-full bg-white text-black font-bold p-4 rounded-2xl flex items-center justify-center gap-3 hover:bg-gray-200 transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] transform hover:-translate-y-0.5"
-                 >
-                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-6 h-6" />
-                    <span className="text-base">{t.sign_in_google}</span>
-                 </button>
-
-                 {/* Guest Mode / Manual Entry */}
-                 <button 
-                    onClick={handleGuestSelect}
-                    className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold p-4 rounded-2xl flex items-center justify-center gap-3 transition-all border border-zinc-800 hover:border-zinc-700"
-                 >
-                    <UserCircle2 className="w-6 h-6 text-gray-400" />
-                    <span className="text-base">{t.guest_mode}</span>
-                 </button>
-            </div>
-            {/* Removed the bottom 'Or continue manually...' text as requested */}
+            <button onClick={handleGoogleSignIn} className="w-full bg-white text-black font-bold p-4 rounded-2xl flex items-center justify-center gap-3 hover:bg-gray-200 transition-all mb-4">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-6 h-6" />
+                {t.sign_in_google}
+            </button>
+            <button onClick={() => { setUser(u => ({...u, isGuest: false, name: ''})); setStep(1); }} className="w-full bg-zinc-900 text-white font-bold p-4 rounded-2xl flex items-center justify-center gap-3 border border-zinc-800">
+                <UserCircle2 className="w-6 h-6 text-zinc-400" />
+                {t.guest_mode}
+            </button>
           </div>
         )}
 
-        {/* Step 1: Profile Setup */}
+        {/* Step 1: Profile & Bank Name */}
         {step === 1 && (
           <div className="w-full max-w-sm animate-in slide-in-from-right duration-300">
-             <div className="flex justify-start mb-6">
-                 <button onClick={() => setStep(0)} className="w-10 h-10 rounded-full bg-zinc-900 flex items-center justify-center text-gray-400 hover:text-white transition-colors border border-zinc-800">
-                     <ChevronLeft size={20} />
-                 </button>
-             </div>
-             
              <h2 className="text-3xl font-bold mb-2 text-left">{t.enter_name}</h2>
-             <p className="text-gray-400 mb-8 text-left text-sm">Please provide your details and API key to continue.</p>
+             <p className="text-zinc-400 mb-8 text-left text-sm">Let's set up your profile and bank.</p>
              
-             <form onSubmit={handleProfileSubmit} className="space-y-5">
-              <div className="text-left group">
-                  <label className="text-xs text-gray-500 ml-1 mb-2 block uppercase tracking-wider font-bold group-focus-within:text-sber-green transition-colors">{t.enter_name}</label>
-                  <input type="text" className="w-full bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800 focus:border-sber-green focus:outline-none text-white transition-all placeholder-zinc-700" placeholder="e.g. John Doe" value={user.name} onChange={e => setUser({...user, name: e.target.value})} required />
+             <form onSubmit={handleProfileSubmit} className="space-y-4">
+              <div className="text-left">
+                  <label className="text-xs text-zinc-500 ml-1 mb-2 block uppercase font-bold">{t.enter_name}</label>
+                  <input type="text" className="w-full bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800 focus:border-sber-green outline-none text-white" placeholder="John Doe" value={user.name} onChange={e => setUser({...user, name: e.target.value})} required />
               </div>
 
-              {/* API Key Input - Always Visible now */}
-              <div className="text-left group">
-                <label className="text-xs text-gray-500 ml-1 mb-2 block uppercase tracking-wider font-bold group-focus-within:text-sber-green transition-colors">{t.enter_key}</label>
+              {/* NEW: Bank Name Input */}
+              <div className="text-left">
+                  <label className="text-xs text-zinc-500 ml-1 mb-2 block uppercase font-bold">Bank Name</label>
+                  <div className="relative">
+                    <input type="text" className="w-full bg-zinc-900/50 p-4 pl-12 rounded-2xl border border-zinc-800 focus:border-sber-green outline-none text-white" placeholder="e.g. AlRajhi Bank" value={user.bankName || ''} onChange={e => setUser({...user, bankName: e.target.value})} required />
+                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 w-5 h-5" />
+                  </div>
+              </div>
+
+              <div className="text-left">
+                <label className="text-xs text-zinc-500 ml-1 mb-2 block uppercase font-bold">{t.enter_key}</label>
                 <div className="relative">
-                    <input 
-                        type="password" 
-                        className={`w-full bg-zinc-900/50 p-4 pr-14 rounded-2xl border focus:outline-none text-white transition-all placeholder-zinc-700 ${
-                            keyStatus === 'valid' ? 'border-sber-green focus:border-sber-green' : 
-                            keyStatus === 'invalid' ? 'border-red-500 focus:border-red-500' : 
-                            'border-zinc-800 focus:border-sber-green'
-                        }`} 
-                        placeholder="AI Studio Key" 
-                        value={user.apiKey} 
-                        onChange={e => {
-                            setUser({...user, apiKey: e.target.value});
-                            setKeyStatus('idle');
-                        }} 
-                        disabled={isValidating}
-                        required
-                    />
-                    {/* Validation Button inside Input */}
+                    <input type="password" className={`w-full bg-zinc-900/50 p-4 pr-14 rounded-2xl border outline-none text-white ${keyStatus === 'valid' ? 'border-sber-green' : keyStatus === 'invalid' ? 'border-red-500' : 'border-zinc-800'}`} placeholder="AI Studio Key" value={user.apiKey} onChange={e => { setUser({...user, apiKey: e.target.value}); setKeyStatus('idle'); }} required />
                     <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                        {keyStatus === 'validating' ? (
-                             <div className="w-8 h-8 flex items-center justify-center">
-                                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                             </div>
-                        ) : (
-                            <button 
-                                type="button"
-                                onClick={checkApiKey}
-                                title="Verify API Key"
-                                disabled={!user.apiKey}
-                                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
-                                    keyStatus === 'valid' ? 'bg-sber-green text-white' : 
-                                    keyStatus === 'invalid' ? 'bg-red-500 text-white' : 
-                                    'bg-zinc-800 text-gray-400 hover:text-white hover:bg-zinc-700'
-                                }`}
-                            >
-                                {keyStatus === 'valid' ? <CheckCircle2 size={18} /> : 
-                                 keyStatus === 'invalid' ? <XCircle size={18} /> : 
-                                 <Key size={18} />}
-                            </button>
-                        )}
+                        <button type="button" onClick={checkApiKey} disabled={!user.apiKey} className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${keyStatus === 'valid' ? 'bg-sber-green text-white' : 'bg-zinc-800 text-zinc-400'}`}>
+                            {keyStatus === 'valid' ? <CheckCircle2 size={18} /> : <Key size={18} />}
+                        </button>
                     </div>
                 </div>
-                {keyStatus === 'valid' && <p className="text-xs text-sber-green mt-1 ml-1">Key verified successfully</p>}
-                {keyStatus === 'invalid' && <p className="text-xs text-red-500 mt-1 ml-1">Invalid API Key</p>}
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-left group">
-                    <label className="text-xs text-gray-500 ml-1 mb-2 block uppercase tracking-wider font-bold group-focus-within:text-sber-green transition-colors">{t.select_currency}</label>
-                    <select className="w-full bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800 focus:border-sber-green focus:outline-none text-white appearance-none transition-all" value={user.currency} onChange={e => setUser({...user, currency: e.target.value as Currency})}>
-                        <option value="USD">USD ($)</option>
-                        <option value="SAR">SAR (﷼)</option>
-                        <option value="RUB">RUB (₽)</option>
-                    </select>
-                </div>
-                <div className="text-left group">
-                    <label className="text-xs text-gray-500 ml-1 mb-2 block uppercase tracking-wider font-bold group-focus-within:text-sber-green transition-colors">Language</label>
-                    <select className="w-full bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800 focus:border-sber-green focus:outline-none text-white appearance-none transition-all" value={user.language} onChange={e => setUser({...user, language: e.target.value as Language})}>
-                        <option value="en">English</option>
-                        <option value="ar">العربية</option>
-                        <option value="ru">Русский</option>
-                    </select>
-                </div>
+              <div className="flex gap-4">
+                 <select className="flex-1 bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800 text-white outline-none" value={user.currency} onChange={e => setUser({...user, currency: e.target.value as Currency})}>
+                    <option value="USD">USD ($)</option>
+                    <option value="SAR">SAR (﷼)</option>
+                    <option value="AED">AED (د.إ)</option>
+                    <option value="RUB">RUB (₽)</option>
+                 </select>
+                 <select className="flex-1 bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800 text-white outline-none" value={user.language} onChange={e => setUser({...user, language: e.target.value as Language})}>
+                    <option value="en">English</option>
+                    <option value="ar">العربية</option>
+                    <option value="ru">Русский</option>
+                 </select>
               </div>
 
-              <button type="submit" className="w-full bg-sber-green hover:bg-green-600 font-bold p-4 rounded-2xl mt-8 flex justify-center gap-2 items-center shadow-lg shadow-sber-green/20 transition-all active:scale-95" disabled={isValidating}>
-                {isValidating ? (
-                    <div className="animate-spin w-5 h-5 border-2 border-white/50 border-t-white rounded-full"/>
-                ) : (
-                    <>
-                       {t.start} <ArrowRight size={20} />
-                    </>
-                )}
+              <button type="submit" className="w-full bg-sber-green hover:bg-green-600 font-bold p-4 rounded-2xl mt-4 flex justify-center gap-2 items-center" disabled={isValidating}>
+                {isValidating ? <Loader2 className="animate-spin" /> : <>{t.start} <ArrowRight size={20} /></>}
               </button>
              </form>
           </div>
@@ -854,179 +1273,131 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete }) => {
 
         {/* Step 2: Balance */}
         {step === 2 && (
-          <div className="w-full max-w-sm animate-in slide-in-from-right duration-300">
+          <div className="w-full max-w-sm animate-in slide-in-from-right">
             <h2 className="text-2xl font-bold mb-2">{t.step_balance}</h2>
-            <p className="text-gray-400 mb-8 text-sm">{t.step_balance_desc}</p>
-            <div className={`h-64 border-2 border-dashed rounded-3xl flex flex-col items-center justify-center cursor-pointer transition-colors ${balanceFile ? 'border-sber-green bg-sber-green/10' : 'border-zinc-700 hover:border-gray-500'}`} onClick={() => document.getElementById('balanceInput')?.click()}>
-              {balanceFile ? (
-                <>
-                  <Check className="w-12 h-12 text-sber-green mb-2" />
-                  <span className="text-sm font-semibold">{balanceFile.name}</span>
-                </>
-              ) : (
-                <>
-                  <ImageIcon className="w-12 h-12 text-gray-500 mb-2" />
-                  <span className="text-sm text-gray-400">{t.upload_image}</span>
-                </>
-              )}
+            <p className="text-zinc-400 mb-8 text-sm">{t.step_balance_desc}</p>
+            <div className={`h-56 border-2 border-dashed rounded-3xl flex flex-col items-center justify-center cursor-pointer transition-colors ${balanceFile ? 'border-sber-green bg-sber-green/10' : 'border-zinc-700'}`} onClick={() => document.getElementById('balanceInput')?.click()}>
+              {balanceFile ? <Check className="w-12 h-12 text-sber-green" /> : <ImageIcon className="w-12 h-12 text-zinc-500" />}
+              <span className="text-sm mt-2 text-zinc-400">{balanceFile ? balanceFile.name : t.upload_image}</span>
               <input id="balanceInput" type="file" accept="image/*" className="hidden" onChange={(e) => setBalanceFile(e.target.files?.[0] || null)} />
             </div>
-            <button onClick={() => setStep(3)} className="w-full bg-zinc-800 hover:bg-zinc-700 p-4 rounded-xl mt-8 font-bold flex items-center justify-center gap-2" disabled={!balanceFile}>
-              Next <ArrowRight size={18} />
-            </button>
+            <button onClick={() => setStep(3)} className="w-full bg-white text-black p-4 rounded-2xl mt-8 font-bold" disabled={!balanceFile}>Next</button>
           </div>
         )}
 
         {/* Step 3: Salary */}
         {step === 3 && (
-          <div className="w-full max-w-sm animate-in slide-in-from-right duration-300">
+          <div className="w-full max-w-sm animate-in slide-in-from-right">
             <h2 className="text-2xl font-bold mb-2">{t.step_salary}</h2>
-            <p className="text-gray-400 mb-8 text-sm">{t.step_salary_desc}</p>
-            <div className={`h-64 border-2 border-dashed rounded-3xl flex flex-col items-center justify-center cursor-pointer transition-colors ${salaryFile ? 'border-sber-green bg-sber-green/10' : 'border-zinc-700 hover:border-gray-500'}`} onClick={() => document.getElementById('salaryInput')?.click()}>
-              {salaryFile ? (
-                <>
-                  <Check className="w-12 h-12 text-sber-green mb-2" />
-                  <span className="text-sm font-semibold">{salaryFile.name}</span>
-                </>
-              ) : (
-                <>
-                  <DollarSign className="w-12 h-12 text-gray-500 mb-2" />
-                  <span className="text-sm text-gray-400">{t.upload_image}</span>
-                </>
-              )}
+            <p className="text-zinc-400 mb-8 text-sm">Upload last salary slip to detect the date.</p>
+            <div className={`h-56 border-2 border-dashed rounded-3xl flex flex-col items-center justify-center cursor-pointer transition-colors ${salaryFile ? 'border-sber-green bg-sber-green/10' : 'border-zinc-700'}`} onClick={() => document.getElementById('salaryInput')?.click()}>
+              {salaryFile ? <Check className="w-12 h-12 text-sber-green" /> : <DollarSign className="w-12 h-12 text-zinc-500" />}
+              <span className="text-sm mt-2 text-zinc-400">{salaryFile ? salaryFile.name : t.upload_image}</span>
               <input id="salaryInput" type="file" accept="image/*" className="hidden" onChange={(e) => setSalaryFile(e.target.files?.[0] || null)} />
             </div>
-            <button onClick={() => setStep(4)} className="w-full bg-zinc-800 hover:bg-zinc-700 p-4 rounded-xl mt-8 font-bold flex items-center justify-center gap-2" disabled={!salaryFile}>
-              Next <ArrowRight size={18} />
-            </button>
+            <button onClick={() => setStep(4)} className="w-full bg-white text-black p-4 rounded-2xl mt-8 font-bold" disabled={!salaryFile}>Next</button>
           </div>
         )}
 
         {/* Step 4: Expenses */}
         {step === 4 && (
-          <div className="w-full max-w-sm animate-in slide-in-from-right duration-300">
+          <div className="w-full max-w-sm animate-in slide-in-from-right">
             <h2 className="text-2xl font-bold mb-2">{t.step_expenses}</h2>
-            <p className="text-gray-400 mb-8 text-sm">{t.step_expenses_desc}</p>
-            <div className={`h-64 border-2 border-dashed rounded-3xl flex flex-col items-center justify-center cursor-pointer transition-colors ${expenseFiles.length > 0 ? 'border-sber-green bg-sber-green/10' : 'border-zinc-700 hover:border-gray-500'}`} onClick={() => document.getElementById('expensesInput')?.click()}>
-               <div className="grid grid-cols-3 gap-2 p-4">
-                 {expenseFiles.slice(0, 6).map((f, i) => (
-                   <div key={i} className="w-16 h-16 bg-black/50 rounded-lg flex items-center justify-center border border-zinc-700">
-                     <span className="text-[10px] truncate w-full px-1">{f.name.slice(0,5)}..</span>
-                   </div>
-                 ))}
-                 {expenseFiles.length === 0 && (
-                    <div className="col-span-3 flex flex-col items-center">
-                       <Upload className="w-12 h-12 text-gray-500 mb-2" />
-                       <span className="text-sm text-gray-400">{t.upload_images}</span>
-                    </div>
-                 )}
-               </div>
+            <div className={`h-56 border-2 border-dashed rounded-3xl flex flex-col items-center justify-center cursor-pointer ${expenseFiles.length ? 'border-sber-green bg-sber-green/10' : 'border-zinc-700'}`} onClick={() => document.getElementById('expensesInput')?.click()}>
+               {expenseFiles.length ? <span className="font-bold text-sber-green">{expenseFiles.length} files</span> : <Upload className="w-12 h-12 text-zinc-500" />}
                <input id="expensesInput" type="file" accept="image/*" multiple className="hidden" onChange={(e) => setExpenseFiles(Array.from(e.target.files || []))} />
             </div>
-            <p className="mt-2 text-xs text-gray-500">{expenseFiles.length} images selected</p>
-            <button onClick={() => setStep(5)} className="w-full bg-zinc-800 hover:bg-zinc-700 p-4 rounded-xl mt-8 font-bold flex items-center justify-center gap-2">
-              Next <ArrowRight size={18} />
-            </button>
+            <button onClick={() => setStep(5)} className="w-full bg-white text-black p-4 rounded-2xl mt-8 font-bold">Next</button>
           </div>
         )}
 
-        {/* Step 5: Fixed Bills (Recurring) */}
+        {/* Step 5: Recurring */}
         {step === 5 && (
-          <div className="w-full max-w-sm animate-in slide-in-from-right duration-300">
-             <h2 className="text-2xl font-bold mb-2">{t.step_recurring}</h2>
-             <p className="text-gray-400 mb-6 text-sm">{t.step_recurring_desc}</p>
-             
-             <div className="space-y-3 mb-6 max-h-60 overflow-y-auto">
-                {recurringBills.map((bill) => (
-                   <div key={bill.id} className="flex justify-between items-center bg-sber-card p-3 rounded-xl border border-zinc-800">
-                      <div className="text-left">
-                         <div className="font-bold">{bill.name}</div>
-                         <div className="text-xs text-gray-400">{bill.amount} {user.currency}</div>
-                      </div>
-                      <button onClick={() => setRecurringBills(recurringBills.filter(b => b.id !== bill.id))}>
-                         <Trash2 className="w-4 h-4 text-red-500" />
-                      </button>
-                   </div>
-                ))}
-             </div>
-
-             <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 mb-6">
-                <input 
-                   type="text" 
-                   placeholder={t.bill_name} 
-                   value={newBillName}
-                   onChange={e => setNewBillName(e.target.value)}
-                   className="w-full bg-black p-3 rounded-lg mb-2 text-sm border border-zinc-700"
-                />
+          <div className="w-full max-w-sm animate-in slide-in-from-right">
+             <h2 className="text-2xl font-bold mb-6">{t.step_recurring}</h2>
+             <div className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 mb-6 space-y-3">
+                <input type="text" placeholder={t.bill_name} value={newBillName} onChange={e => setNewBillName(e.target.value)} className="w-full bg-black p-3 rounded-xl border border-zinc-700 outline-none" />
                 <div className="flex gap-2">
-                   <input 
-                      type="number" 
-                      placeholder={t.bill_amount}
-                      value={newBillAmount}
-                      onChange={e => setNewBillAmount(e.target.value)}
-                      className="w-full bg-black p-3 rounded-lg text-sm border border-zinc-700"
-                   />
-                   <button onClick={handleAddBill} className="bg-sber-green p-3 rounded-lg">
-                      <Plus className="text-white" />
-                   </button>
+                   <input type="number" placeholder={t.bill_amount} value={newBillAmount} onChange={e => setNewBillAmount(e.target.value)} className="w-full bg-black p-3 rounded-xl border border-zinc-700 outline-none" />
+                   <button onClick={() => { if(newBillName && newBillAmount) { setRecurringBills([...recurringBills, { id: Date.now().toString(), name: newBillName, amount: Number(newBillAmount) }]); setNewBillName(''); setNewBillAmount(''); } }} className="bg-sber-green p-3 rounded-xl"><Plus className="text-white" /></button>
+                </div>
+                <div className="space-y-2 pt-2">
+                    {recurringBills.map(b => (
+                        <div key={b.id} className="flex justify-between p-2 bg-black rounded-lg border border-zinc-800"><span className="text-sm">{b.name}</span> <span className="text-xs text-zinc-500">{b.amount}</span></div>
+                    ))}
                 </div>
              </div>
-
-             <button onClick={handleStartAnalysis} className="w-full bg-sber-green hover:bg-green-600 p-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-sber-green/20">
-               Analyze All Data <Zap size={18} />
-             </button>
+             <button onClick={handleStartAnalysis} className="w-full bg-sber-green hover:bg-green-600 p-4 rounded-2xl font-bold flex items-center justify-center gap-2">Analyze All <Zap size={18} /></button>
           </div>
         )}
 
-        {/* Step 6: Analysis Loading */}
+        {/* Step 6: Loading */}
         {step === 6 && (
-           <div className="flex flex-col items-center justify-center animate-in fade-in duration-500">
-              <div className="relative w-32 h-32 mb-8">
-                <div className="absolute inset-0 border-4 border-zinc-800 rounded-full"></div>
-                <div className="absolute inset-0 border-4 border-sber-green rounded-full border-t-transparent animate-spin"></div>
-                <div className="absolute inset-0 flex items-center justify-center">
-                   <Zap className="w-10 h-10 text-sber-green animate-pulse" />
-                </div>
-              </div>
-              <h2 className="text-xl font-bold mb-2">{t.analyzing_all}</h2>
-              <p className="text-gray-500 text-sm max-w-xs">Connecting to Gemini AI to extract your balance, income patterns, and recent spending...</p>
+           <div className="flex flex-col items-center justify-center animate-in fade-in">
+              <Loader2 className="w-16 h-16 text-sber-green animate-spin mb-4" />
+              <h2 className="text-xl font-bold">{t.analyzing_all}</h2>
            </div>
         )}
 
-        {/* Step 7: Calendar & Review */}
+        {/* Step 7: Review & Smart Salary Logic */}
         {step === 7 && analysisResult && (
-           <div className="w-full max-w-md animate-in slide-in-from-bottom duration-500 pb-10">
+           <div className="w-full max-w-sm animate-in slide-in-from-bottom pb-10">
               <h2 className="text-2xl font-bold mb-1">{t.step_review}</h2>
-              <p className="text-gray-400 mb-6 text-sm">We found the following data. Please confirm.</p>
+              <p className="text-zinc-400 mb-6 text-sm">Configure your cycle and savings.</p>
               
               <div className="space-y-4">
-                 <div className="bg-sber-card p-4 rounded-xl border border-zinc-800 flex justify-between items-center">
-                    <span className="text-gray-400 text-sm">{t.step_balance}</span>
-                    <span className="text-xl font-bold text-white">{analysisResult.currentBalance.toLocaleString()} {user.currency}</span>
-                 </div>
-
-                 <div className="space-y-2">
-                    <label className="text-sm text-gray-400 ml-1 block text-left">{t.next_salary_date}</label>
-                    <CalendarGrid selectedDate={plannedNextSalaryDate} onSelectDate={setPlannedNextSalaryDate} />
-                 </div>
-
-                 <div className="bg-sber-card p-4 rounded-xl border border-zinc-800">
-                    <div className="flex justify-between mb-2">
-                       <label className="text-sm text-gray-400">{t.expected_amount}</label>
-                       <span className="text-xs text-gray-500">Last: {analysisResult.lastSalary.amount}</span>
+                 {/* 1. Balances */}
+                 <div className="bg-[#1C1C1E] p-4 rounded-2xl border border-zinc-800 space-y-3">
+                    <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                        <div className="flex items-center gap-2 text-zinc-400">
+                            <Wallet size={16} /> <span className="text-xs font-bold uppercase">Spending</span>
+                        </div>
+                        <span className="font-mono font-bold text-white">{analysisResult.currentBalance.toLocaleString()}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                       <span className="text-sber-green font-bold text-xl">{user.currency}</span>
-                       <input 
-                         type="number" 
-                         value={plannedNextSalaryAmount} 
-                         onChange={(e) => setPlannedNextSalaryAmount(Number(e.target.value))}
-                         className="bg-transparent text-2xl font-bold text-white w-full focus:outline-none"
-                       />
+                    <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2 text-sber-green">
+                            <PiggyBank size={16} /> <span className="text-xs font-bold uppercase">Savings</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <input 
+                                type="number" 
+                                value={savingsInitial} 
+                                onChange={e => setSavingsInitial(Number(e.target.value))}
+                                className="bg-black/50 text-white w-20 text-right p-1 rounded-md text-sm border border-zinc-700 outline-none focus:border-sber-green"
+                            />
+                        </div>
                     </div>
                  </div>
 
-                 <button onClick={() => onComplete(analysisResult, plannedNextSalaryDate, plannedNextSalaryAmount, recurringBills)} className="w-full bg-sber-green hover:bg-green-600 p-4 rounded-xl mt-4 font-bold shadow-lg shadow-sber-green/20">
+                 {/* 2. Smart Salary Interval */}
+                 <div className="bg-[#1C1C1E] p-4 rounded-2xl border border-zinc-800">
+                    <div className="flex items-center gap-2 mb-4">
+                        <CalendarClock className="text-purple-400 w-5 h-5" />
+                        <span className="text-sm font-bold text-white">Salary Cycle</span>
+                    </div>
+                    
+                    <div className="mb-4">
+                        <p className="text-xs text-zinc-500 mb-1">AI detected last salary on:</p>
+                        <p className="text-white font-mono bg-black/40 p-2 rounded-lg inline-block border border-zinc-800">
+                            {analysisResult.lastSalary.date}
+                        </p>
+                    </div>
+
+                    <div className="mb-4">
+                        <label className="text-xs text-zinc-400 block mb-2">How often do you get paid? (Days)</label>
+                        <input 
+                            type="number" 
+                            value={salaryInterval} 
+                            onChange={e => setSalaryInterval(Number(e.target.value))}
+                            className="w-full bg-black/50 text-white p-3 rounded-xl border border-zinc-700 text-center font-bold outline-none focus:border-purple-500"
+                        />
+                    </div>
+
+                    {/* 3. Visual Calendar Animation */}
+                    <SmartCalendar lastSalaryDate={analysisResult.lastSalary.date} interval={salaryInterval} />
+                 </div>
+
+                 <button onClick={handleFinalize} className="w-full bg-white text-black p-4 rounded-2xl mt-4 font-bold shadow-lg">
                     {t.confirm_setup}
                  </button>
               </div>
@@ -1043,7 +1414,7 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete }) => {
 import React, { useState } from 'react';
 import { RecurringBill, UserSettings } from '../types';
 import { TRANSLATIONS } from '../constants';
-import { Check, Calendar, X, Plus, Trash2 } from 'lucide-react';
+import { Check, Calendar, X, Plus, Trash2, AlertCircle } from 'lucide-react';
 
 interface Props {
   user: UserSettings;
@@ -1085,119 +1456,114 @@ export const RecurringBills: React.FC<Props> = ({ user, onPayBill, onAddBill, on
   };
 
   return (
-    <div className="bg-[#1C1C1E] rounded-[2rem] p-6 border border-white/5 shadow-xl relative overflow-hidden group">
-      {/* Decorative background glow */}
-      <div className="absolute top-0 right-0 w-32 h-32 bg-sber-green/5 rounded-full blur-[40px] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
-
-      <div className="flex justify-between items-center mb-6 relative z-10">
-        <h3 className="font-bold text-lg text-white flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-sber-green" />
-            {t.fixed_bills}
-        </h3>
-        <button 
+    <div className="space-y-3">
+      {/* List */}
+      {bills.length === 0 ? (
+        <div 
             onClick={() => setIsAdding(true)}
-            className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center text-sber-green hover:bg-sber-green hover:text-white transition-all border border-white/5 shadow-sm"
+            className="flex flex-col items-center justify-center py-8 border-2 border-dashed border-white/10 rounded-2xl bg-white/5 cursor-pointer hover:bg-white/10 transition-colors"
         >
-            <Plus size={18} />
-        </button>
-      </div>
-
-      <div className="space-y-3 relative z-10">
-        {bills.length === 0 && (
-            <div className="text-center py-8 text-gray-500 text-sm bg-black/20 rounded-2xl border border-dashed border-zinc-800">
-                No fixed bills added yet.
-            </div>
-        )}
-
-        {bills.map(bill => {
-          const isPaid = bill.lastPaidDate && bill.lastPaidDate.startsWith(currentMonth);
-          return (
-            <div 
-              key={bill.id}
-              className={`group/item flex items-center justify-between p-4 rounded-2xl border transition-all duration-300 cursor-pointer ${
-                isPaid 
-                ? 'bg-sber-green/5 border-sber-green/20 opacity-70' 
-                : 'bg-black/20 border-white/5 hover:border-zinc-600 hover:bg-black/40'
-              }`}
-              onClick={() => !isPaid && setSelectedBill(bill)}
+            <Plus className="w-6 h-6 text-zinc-500 mb-2" />
+            <p className="text-xs text-zinc-500 font-medium">Tap to add fixed bills</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-2">
+            {bills.map(bill => {
+            const isPaid = bill.lastPaidDate && bill.lastPaidDate.startsWith(currentMonth);
+            return (
+                <div 
+                key={bill.id}
+                onClick={() => !isPaid && setSelectedBill(bill)}
+                className={`relative overflow-hidden p-4 rounded-2xl border transition-all duration-300 flex items-center justify-between group ${
+                    isPaid 
+                    ? 'bg-sber-green/5 border-sber-green/20 opacity-60' 
+                    : 'bg-[#1C1C1E] border-white/5 hover:border-white/10 active:scale-[0.98]'
+                }`}
+                >
+                <div className="flex items-center gap-4 z-10">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${isPaid ? 'bg-sber-green text-white' : 'bg-white/5 text-zinc-400'}`}>
+                        {isPaid ? <Check size={18} strokeWidth={3} /> : <Calendar size={18} />}
+                    </div>
+                    <div>
+                        <h4 className={`font-bold text-sm ${isPaid ? 'text-zinc-500 line-through' : 'text-white'}`}>{bill.name}</h4>
+                        <p className="text-[10px] text-zinc-500 font-mono">
+                            {isPaid ? `Paid: ${bill.lastPaidDate}` : 'Due this month'}
+                        </p>
+                    </div>
+                </div>
+                
+                <div className="flex items-center gap-3 z-10">
+                    <span className={`font-bold text-sm ${isPaid ? 'text-zinc-500' : 'text-white'}`}>
+                        {bill.amount} <span className="text-[10px] opacity-50">{user.currency}</span>
+                    </span>
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onDeleteBill(bill.id); }}
+                        className="p-2 rounded-full hover:bg-red-500/20 text-zinc-600 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                        <Trash2 size={14} />
+                    </button>
+                </div>
+                </div>
+            );
+            })}
+            
+            {/* Add Button Row */}
+            <button 
+                onClick={() => setIsAdding(true)}
+                className="w-full py-3 rounded-xl border border-dashed border-white/10 text-xs font-bold text-zinc-500 hover:text-white hover:border-white/20 transition-all flex items-center justify-center gap-2"
             >
-              <div className="flex items-center gap-4 flex-1">
-                 <div className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-300 ${isPaid ? 'bg-sber-green border-sber-green shadow-[0_0_10px_rgba(33,160,56,0.3)]' : 'border-zinc-700 bg-white/5 group-hover/item:border-sber-green'}`}>
-                    {isPaid && <Check className="w-4 h-4 text-white" />}
-                 </div>
-                 <div>
-                    <p className={`font-bold text-sm transition-colors ${isPaid ? 'line-through text-gray-500' : 'text-white group-hover/item:text-gray-200'}`}>{bill.name}</p>
-                    {isPaid ? (
-                        <p className="text-[10px] text-sber-green font-medium">Paid {bill.lastPaidDate}</p>
-                    ) : (
-                        <p className="text-[10px] text-gray-500">Tap to mark paid</p>
-                    )}
-                 </div>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                  <span className={`font-mono font-bold text-sm ${isPaid ? 'text-gray-500' : 'text-white'}`}>
-                      {bill.amount.toLocaleString()} <span className="text-[10px] font-sans text-gray-500">{user.currency}</span>
-                  </span>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); onDeleteBill(bill.id); }}
-                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-red-500/10 text-zinc-600 hover:text-red-500 transition-colors opacity-0 group-hover/item:opacity-100"
-                  >
-                      <Trash2 size={16} />
-                  </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                <Plus size={14} /> Add Bill
+            </button>
+        </div>
+      )}
 
       {/* Payment Modal */}
       {selectedBill && (
-         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            {/* Darker overlay to prevent bleed-through */}
-            <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={() => setSelectedBill(null)} />
-            
-            <div className="relative bg-[#1C1C1E] border border-white/10 w-full max-w-sm rounded-[2rem] p-6 animate-in zoom-in-95 duration-200 shadow-2xl">
-               <div className="flex justify-between items-center mb-8">
-                  <h3 className="text-xl font-bold text-white">{t.confirm_payment}</h3>
-                  <button onClick={() => setSelectedBill(null)} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:bg-white/10 hover:text-white transition-colors">
-                      <X size={20} />
-                  </button>
-               </div>
+         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4">
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedBill(null)} />
+            <div className="relative bg-[#1C1C1E] border border-white/10 w-full sm:max-w-sm rounded-t-[2rem] sm:rounded-[2rem] p-6 animate-in slide-in-from-bottom-full duration-300">
+               <div className="w-12 h-1 bg-zinc-700 rounded-full mx-auto mb-6 sm:hidden" />
                
-               <div className="mb-8 text-center bg-black/20 rounded-3xl p-6 border border-white/5">
-                  <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-2">{t.bill_name}</p>
-                  <p className="text-3xl font-bold text-white mb-3">{selectedBill.name}</p>
-                  <div className="inline-block bg-sber-green/10 text-sber-green border border-sber-green/20 px-4 py-1.5 rounded-full font-mono font-bold text-lg">
-                    {selectedBill.amount.toLocaleString()} {user.currency}
+               <div className="text-center mb-8">
+                  <div className="w-16 h-16 bg-sber-green/10 rounded-full flex items-center justify-center mx-auto mb-4 text-sber-green">
+                      <Check size={32} />
                   </div>
+                  <h3 className="text-xl font-bold text-white mb-1">{t.confirm_payment}</h3>
+                  <p className="text-sm text-gray-400">Mark <span className="text-white font-bold">{selectedBill.name}</span> as paid?</p>
                </div>
 
                <div className="space-y-4">
-                  <div>
-                     <label className="text-xs text-gray-400 ml-2 mb-2 block font-bold uppercase tracking-wider">{t.payment_date}</label>
-                     <input 
-                        type="date" 
-                        value={payDate}
-                        onChange={(e) => setPayDate(e.target.value)}
-                        className="w-full bg-black/40 text-white p-4 rounded-2xl border border-white/10 focus:border-sber-green focus:outline-none transition-colors"
-                     />
+                  <div className="bg-black/40 p-4 rounded-2xl flex items-center justify-between border border-white/5">
+                      <span className="text-sm text-gray-400">Amount</span>
+                      <span className="text-lg font-bold text-white">{selectedBill.amount} {user.currency}</span>
                   </div>
 
-                  <label className="flex items-center gap-4 p-4 bg-black/40 rounded-2xl border border-white/10 cursor-pointer hover:border-zinc-600 transition-colors">
-                     <div className={`w-6 h-6 rounded border flex items-center justify-center transition-all ${deduct ? 'bg-sber-green border-sber-green' : 'border-zinc-600'}`}>
-                        {deduct && <Check className="w-4 h-4 text-white" />}
-                     </div>
-                     <input type="checkbox" checked={deduct} onChange={e => setDeduct(e.target.checked)} className="hidden" />
-                     <span className="text-sm font-medium text-gray-200">{t.deduct_balance}</span>
-                  </label>
+                  <div className="flex gap-3">
+                      <div className="flex-1">
+                        <label className="text-[10px] text-gray-500 font-bold uppercase ml-2 mb-1 block">Date</label>
+                        <input 
+                            type="date" 
+                            value={payDate}
+                            onChange={(e) => setPayDate(e.target.value)}
+                            className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/10 text-sm outline-none focus:border-sber-green"
+                        />
+                      </div>
+                  </div>
 
-                  <button 
-                     onClick={confirmPayment}
-                     className="w-full bg-sber-green hover:bg-green-600 py-4 rounded-2xl font-bold text-white shadow-lg shadow-sber-green/20 transition-all active:scale-95 mt-2"
+                  <div 
+                    onClick={() => setDeduct(!deduct)}
+                    className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${deduct ? 'bg-sber-green/10 border-sber-green/50' : 'bg-black/40 border-white/5'}`}
                   >
-                     {t.confirm}
-                  </button>
+                     <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${deduct ? 'bg-sber-green border-sber-green' : 'border-zinc-600'}`}>
+                        {deduct && <Check size={12} className="text-white" />}
+                     </div>
+                     <span className="text-sm font-medium text-gray-300">{t.deduct_balance}</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 mt-4">
+                      <button onClick={() => setSelectedBill(null)} className="py-3 rounded-xl font-bold text-sm bg-zinc-800 text-white">Cancel</button>
+                      <button onClick={confirmPayment} className="py-3 rounded-xl font-bold text-sm bg-sber-green text-white shadow-lg shadow-sber-green/20">Confirm</button>
+                  </div>
                </div>
             </div>
          </div>
@@ -1205,30 +1571,27 @@ export const RecurringBills: React.FC<Props> = ({ user, onPayBill, onAddBill, on
 
       {/* Add Bill Modal */}
       {isAdding && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={() => setIsAdding(false)} />
-            
-            <div className="relative bg-[#1C1C1E] border border-white/10 w-full max-w-sm rounded-[2rem] p-6 animate-in zoom-in-95 duration-200 shadow-2xl">
-               <div className="flex justify-between items-center mb-8">
-                  <h3 className="text-xl font-bold text-white">{t.add_bill}</h3>
-                  <button onClick={() => setIsAdding(false)} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:bg-white/10 hover:text-white transition-colors">
-                      <X size={20} />
-                  </button>
-               </div>
+          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4">
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsAdding(false)} />
+            <div className="relative bg-[#1C1C1E] border border-white/10 w-full sm:max-w-sm rounded-t-[2rem] sm:rounded-[2rem] p-6 animate-in slide-in-from-bottom-full duration-300">
+               <div className="w-12 h-1 bg-zinc-700 rounded-full mx-auto mb-6 sm:hidden" />
                
-               <div className="space-y-5">
+               <h3 className="text-xl font-bold text-white mb-6 text-center">{t.add_bill}</h3>
+               
+               <div className="space-y-4">
                   <div>
-                     <label className="text-xs text-gray-400 ml-2 mb-2 block font-bold uppercase tracking-wider">{t.bill_name}</label>
+                     <label className="text-[10px] text-gray-500 font-bold uppercase ml-2 mb-1 block">{t.bill_name}</label>
                      <input 
                         type="text"
                         placeholder="e.g. Netflix"
                         value={newName}
                         onChange={(e) => setNewName(e.target.value)}
                         className="w-full bg-black/40 text-white p-4 rounded-2xl border border-white/10 focus:border-sber-green focus:outline-none transition-colors"
+                        autoFocus
                      />
                   </div>
                   <div>
-                     <label className="text-xs text-gray-400 ml-2 mb-2 block font-bold uppercase tracking-wider">{t.bill_amount}</label>
+                     <label className="text-[10px] text-gray-500 font-bold uppercase ml-2 mb-1 block">{t.bill_amount}</label>
                      <div className="relative">
                         <input 
                             type="number"
@@ -1244,7 +1607,7 @@ export const RecurringBills: React.FC<Props> = ({ user, onPayBill, onAddBill, on
                   <button 
                      onClick={handleSaveNewBill}
                      disabled={!newName || !newAmount}
-                     className="w-full bg-sber-green hover:bg-green-600 py-4 rounded-2xl font-bold text-white shadow-lg shadow-sber-green/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+                     className="w-full bg-white text-black hover:bg-gray-200 py-4 rounded-2xl font-bold text-sm shadow-lg mt-2 disabled:opacity-50"
                   >
                      {t.save}
                   </button>
@@ -1261,10 +1624,10 @@ export const RecurringBills: React.FC<Props> = ({ user, onPayBill, onAddBill, on
 ### File: `components\Reports.tsx`
 ```tsx
 import React from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, Tooltip, YAxis, CartesianGrid } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, Tooltip, YAxis, CartesianGrid, Area, AreaChart } from 'recharts';
 import { Transaction, Language } from '../types';
 import { CATEGORIES, TRANSLATIONS } from '../constants';
-import { FileWarning, PieChart as PieIcon, TrendingUp } from 'lucide-react';
+import { AlertTriangle, TrendingUp, DollarSign, PieChart as PieIcon, ArrowRight } from 'lucide-react';
 
 interface Props {
   transactions: Transaction[];
@@ -1274,31 +1637,30 @@ interface Props {
 export const Reports: React.FC<Props> = ({ transactions, language }) => {
   const t = TRANSLATIONS[language];
 
-  // Group by category (Expenses Only)
+  // Logic: Filter Expenses
   const expenses = transactions.filter(t => t.type === 'expense');
   const totalExpenses = expenses.reduce((sum, t) => sum + Number(t.amount), 0);
 
+  // Group by Category
   const dataMap = expenses.reduce((acc, curr) => {
     const amount = Number(curr.amount);
-    const catKey = (curr.category || 'unknown').toLowerCase();
+    const catKey = curr.category || 'utilities';
     acc[catKey] = (acc[catKey] || 0) + amount;
     return acc;
   }, {} as Record<string, number>);
 
   const pieData = Object.keys(dataMap).map(catId => {
-    const category = CATEGORIES.find(c => c.id.toLowerCase() === catId.toLowerCase());
-    const displayName = category 
-      ? (language === 'ar' ? category.name_ar : language === 'ru' ? category.name_ru : category.name_en) 
-      : catId.charAt(0).toUpperCase() + catId.slice(1);
-
+    const category = CATEGORIES.find(c => c.id === catId) || CATEGORIES[4];
+    const name = language === 'ar' ? category.name_ar : category.name_en;
     return {
-      name: displayName,
+      name,
       value: dataMap[catId],
-      color: category ? category.color : '#6b7280'
+      color: category.color,
+      icon: category.icon
     };
   }).sort((a, b) => b.value - a.value);
 
-  // Last 7 days data for Bar Chart
+  // Weekly Trend Data
   const last7Days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - i);
@@ -1317,139 +1679,340 @@ export const Reports: React.FC<Props> = ({ transactions, language }) => {
   });
 
   const hasData = expenses.length > 0;
+  const topCategory = pieData.length > 0 ? pieData[0] : null;
 
   return (
-    <div className="space-y-6 pb-24 animate-in fade-in duration-700">
-      <div className="px-2">
-        <h2 className="text-3xl font-bold text-white mb-1">{t.reports}</h2>
-        <p className="text-gray-400 text-sm">{language === 'ar' ? 'نظرة عامة على إنفاقك' : 'Overview of your spending'}</p>
-      </div>
+    <div className="space-y-6 pb-24">
       
-      {/* Pie Chart Card */}
-      <div className="bg-[#1C1C1E] p-6 rounded-[2rem] shadow-xl border border-white/5 relative overflow-hidden">
-        <div className="flex justify-between items-center mb-6">
-             <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <PieIcon className="w-5 h-5 text-sber-green" />
-                {t.expense} / {t.category}
-             </h3>
-             <span className="text-xs font-mono text-gray-400 bg-white/5 px-2 py-1 rounded-lg border border-white/5">Last 30 Days</span>
-        </div>
+      {/* Header */}
+      <div className="flex items-center gap-3 px-2 mb-2">
+         <div className="bg-sber-green/10 p-3 rounded-2xl border border-sber-green/20">
+             <PieIcon className="w-6 h-6 text-sber-green" />
+         </div>
+         <h2 className="text-2xl font-bold text-white leading-none">{t.reports}</h2>
+      </div>
 
+      {/* 1. Smart Insight Card (The "Headline") */}
+      {hasData && topCategory && (
+        <div className="bg-gradient-to-br from-[#1C1C1E] to-black p-6 rounded-[2rem] border border-white/5 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-full blur-[40px] opacity-50 group-hover:opacity-100 transition-opacity"></div>
+            
+            <div className="relative z-10">
+                <div className="flex items-center gap-2 mb-2 text-red-400">
+                    <AlertTriangle size={16} />
+                    <span className="text-xs font-bold uppercase tracking-widest">Top Spending</span>
+                </div>
+                <div className="flex items-end justify-between">
+                    <div>
+                        <h3 className="text-3xl font-bold text-white mb-1">{topCategory.name}</h3>
+                        <p className="text-sm text-gray-400">
+                            {((topCategory.value / totalExpenses) * 100).toFixed(0)}% of your expenses
+                        </p>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-2xl font-mono font-bold text-white">{topCategory.value.toLocaleString()}</p>
+                    </div>
+                </div>
+                <div className="w-full bg-zinc-800 h-2 rounded-full mt-4 overflow-hidden">
+                    <div 
+                        className="h-full bg-red-500 rounded-full shadow-[0_0_10px_rgba(239,68,68,0.5)]" 
+                        style={{ width: `${(topCategory.value / totalExpenses) * 100}%` }}
+                    />
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* 2. Donut Chart Section */}
+      <div className="bg-[#1C1C1E] p-6 rounded-[2rem] border border-white/5">
+        <h3 className="font-bold text-white mb-6 flex items-center gap-2">
+            <DollarSign className="w-5 h-5 text-sber-green" /> Spending Distribution
+        </h3>
+        
         {hasData ? (
-            <>
-                <div className="h-[300px] w-full relative flex items-center justify-center">
+            <div className="flex flex-col md:flex-row items-center gap-8">
+                {/* Chart */}
+                <div className="h-[220px] w-[220px] relative">
                     <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                        <Pie
-                        data={pieData}
-                        innerRadius={80}
-                        outerRadius={110}
-                        paddingAngle={4}
-                        dataKey="value"
-                        stroke="none"
-                        cornerRadius={6}
-                        >
-                        {pieData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                        </Pie>
-                        <Tooltip 
-                            contentStyle={{ backgroundColor: '#18181b', border: '1px solid #333', borderRadius: '12px', color: '#fff', boxShadow: '0 10px 30px -10px rgba(0,0,0,0.5)' }}
-                            itemStyle={{ color: '#fff' }}
-                            formatter={(value: number) => value.toLocaleString()}
-                        />
-                    </PieChart>
+                        <PieChart>
+                            <Pie
+                                data={pieData}
+                                innerRadius={70}
+                                outerRadius={100}
+                                paddingAngle={5}
+                                dataKey="value"
+                                cornerRadius={8}
+                                stroke="none"
+                            >
+                                {pieData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                            </Pie>
+                            <Tooltip 
+                                contentStyle={{ backgroundColor: '#000', borderRadius: '12px', border: '1px solid #333' }}
+                                itemStyle={{ color: '#fff' }}
+                                formatter={(value: number) => value.toLocaleString()}
+                            />
+                        </PieChart>
                     </ResponsiveContainer>
-                    
-                    {/* Centered Total */}
+                    {/* Center Text */}
                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        <span className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">Total</span>
-                        <span className="text-3xl font-bold text-white tracking-tighter">
-                            {totalExpenses.toLocaleString()}
-                        </span>
+                        <span className="text-xs text-gray-500 font-bold uppercase">Total</span>
+                        <span className="text-xl font-bold text-white tabular-nums">{totalExpenses.toLocaleString()}</span>
                     </div>
                 </div>
 
-                {/* Legend */}
-                <div className="grid grid-cols-2 gap-3 mt-6">
-                    {pieData.slice(0, 6).map((entry, i) => (
-                        <div key={i} className="flex items-center justify-between p-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-white/5">
-                            <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full shadow-[0_0_10px_currentColor]" style={{ backgroundColor: entry.color, color: entry.color }} />
-                                <span className="text-xs text-gray-300 font-medium truncate max-w-[80px]">{entry.name}</span>
+                {/* Categories List */}
+                <div className="flex-1 w-full space-y-4">
+                    {pieData.slice(0, 4).map((cat, idx) => (
+                        <div key={idx} className="group">
+                            <div className="flex justify-between items-center mb-1">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
+                                    <span className="text-sm font-medium text-gray-200">{cat.name}</span>
+                                </div>
+                                <span className="text-sm font-bold text-white">{cat.value.toLocaleString()}</span>
                             </div>
-                            <span className="text-xs font-bold text-white">{((entry.value / totalExpenses) * 100).toFixed(0)}%</span>
+                            <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                                <div 
+                                    className="h-full rounded-full transition-all duration-1000 ease-out"
+                                    style={{ width: `${(cat.value / totalExpenses) * 100}%`, backgroundColor: cat.color }}
+                                />
+                            </div>
                         </div>
                     ))}
+                    {pieData.length > 4 && (
+                        <button className="w-full text-xs text-gray-500 py-2 hover:text-white transition-colors flex items-center justify-center gap-1">
+                            View All Categories <ArrowRight size={12} />
+                        </button>
+                    )}
                 </div>
-            </>
-        ) : (
-            <div className="h-[300px] flex flex-col items-center justify-center text-gray-500 gap-4">
-                <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center">
-                    <FileWarning className="w-8 h-8 text-zinc-600" />
-                </div>
-                <p>No expense data found.</p>
             </div>
+        ) : (
+            <div className="py-10 text-center text-gray-500">No data to display.</div>
         )}
       </div>
 
-      {/* Bar Chart Card */}
-      <div className="bg-[#1C1C1E] p-6 rounded-[2rem] shadow-xl border border-white/5">
-         <div className="flex items-center justify-between mb-8">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-sber-green" />
-                Weekly Trend
-            </h3>
-         </div>
+      {/* 3. Weekly Trend (Bar Chart) */}
+      <div className="bg-[#1C1C1E] p-6 rounded-[2rem] border border-white/5">
+         <h3 className="font-bold text-white mb-6 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-blue-400" /> Weekly Activity
+         </h3>
          
-         {hasData ? (
-             <div className="h-[220px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={barData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+         <div className="h-[200px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={barData} barSize={12}>
                     <defs>
                         <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#21A038" stopOpacity={1}/>
-                        <stop offset="100%" stopColor="#21A038" stopOpacity={0.4}/>
+                            <stop offset="0%" stopColor="#3b82f6" stopOpacity={1}/>
+                            <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.3}/>
                         </linearGradient>
                     </defs>
                     <CartesianGrid vertical={false} stroke="#333" strokeDasharray="3 3" opacity={0.3} />
                     <XAxis 
                         dataKey="name" 
                         stroke="#52525b" 
-                        tick={{fill: '#71717a', fontSize: 10, fontWeight: 500}} 
-                        tickLine={false} 
+                        tick={{fill: '#71717a', fontSize: 10}} 
                         axisLine={false} 
+                        tickLine={false} 
                         dy={10}
                     />
-                    <YAxis 
-                        stroke="#52525b" 
-                        tick={{fill: '#71717a', fontSize: 10}} 
-                        tickLine={false} 
-                        axisLine={false}
-                        tickCount={5}
-                    />
                     <Tooltip 
-                        cursor={{fill: '#ffffff', opacity: 0.05, radius: 8}}
-                        contentStyle={{ backgroundColor: '#18181b', border: '1px solid #333', borderRadius: '8px', color: '#fff' }}
-                        formatter={(value: number) => [value.toLocaleString(), 'Spent']}
-                        itemStyle={{ color: '#21A038' }}
+                        cursor={{fill: '#ffffff', opacity: 0.05, radius: 4}}
+                        contentStyle={{ backgroundColor: '#000', border: '1px solid #333', borderRadius: '8px', color: '#fff' }}
                     />
                     <Bar 
                         dataKey="amount" 
                         fill="url(#barGradient)" 
-                        radius={[6, 6, 6, 6]} 
-                        barSize={24}
-                        minPointSize={2}
+                        radius={[10, 10, 10, 10]} 
                     />
-                    </BarChart>
-                </ResponsiveContainer>
-             </div>
-         ) : (
-            <div className="h-[200px] flex items-center justify-center text-gray-500">
-                <p>No activity this week.</p>
-            </div>
-         )}
+                </BarChart>
+            </ResponsiveContainer>
+         </div>
       </div>
+
+    </div>
+  );
+};
+```
+---
+
+### File: `components\SettingsPage.tsx`
+```tsx
+import React, { useState } from 'react';
+import { Settings, Globe, ChevronRight, Key, CheckCircle, LogOut, User, Shield, Coins, AlertTriangle, Loader2 } from 'lucide-react';
+import { UserSettings, Currency, Language } from '../types';
+import { TRANSLATIONS } from '../constants';
+import { validateApiKey } from '../services/geminiService';
+
+interface Props {
+  user: UserSettings;
+  setUser: React.Dispatch<React.SetStateAction<UserSettings>>;
+  onLogout: () => void;
+}
+
+export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
+  const t = TRANSLATIONS[user.language];
+  const [editingKey, setEditingKey] = useState('');
+  const [isValidatingKey, setIsValidatingKey] = useState(false);
+  const [showKeyInput, setShowKeyInput] = useState(false);
+
+  const handleUpdateApiKey = async () => {
+    if (!editingKey.trim()) return;
+    setIsValidatingKey(true);
+    const isValid = await validateApiKey(editingKey.trim());
+    if (isValid) {
+      setUser(u => ({ ...u, apiKey: editingKey.trim(), isGuest: false }));
+      alert(t.key_valid_saved);
+      setEditingKey('');
+      setShowKeyInput(false);
+    } else {
+      alert(t.key_invalid);
+    }
+    setIsValidatingKey(false);
+  };
+
+  const SettingRow = ({ icon: Icon, title, value, onClick, color = "text-gray-400" }: any) => (
+    <button 
+        onClick={onClick}
+        className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors group"
+    >
+        <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg bg-zinc-900 border border-white/5 ${color}`}>
+                <Icon size={18} />
+            </div>
+            <span className="font-medium text-gray-200 text-sm">{title}</span>
+        </div>
+        <div className="flex items-center gap-2">
+            <span className="text-zinc-500 text-xs font-medium">{value}</span>
+            <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-white transition-colors" />
+        </div>
+    </button>
+  );
+
+  return (
+    <div className="pb-24 space-y-6">
+      
+      {/* Header */}
+      <div className="flex items-center gap-3 px-2 mb-4">
+          <div className="bg-sber-green/10 p-3 rounded-2xl border border-sber-green/20">
+              <Settings className="w-6 h-6 text-sber-green" />
+          </div>
+          <h2 className="text-2xl font-bold text-white leading-none">{t.settings}</h2>
+      </div>
+
+      {/* Profile Section */}
+      <div className="bg-[#1C1C1E] p-6 rounded-[2rem] border border-white/5 flex items-center gap-4">
+          <div className="relative">
+            {user.photoURL ? (
+                <img src={user.photoURL} alt="Profile" className="w-16 h-16 rounded-full border-2 border-zinc-800" />
+            ) : (
+                <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center border-2 border-zinc-700">
+                    <span className="text-2xl font-bold text-gray-400">{user.name.charAt(0)}</span>
+                </div>
+            )}
+            {user.isGuest && (
+                <div className="absolute -bottom-1 -right-1 bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full border border-black">
+                    GUEST
+                </div>
+            )}
+          </div>
+          <div>
+              <h3 className="text-lg font-bold text-white">{user.name || 'Guest User'}</h3>
+              <p className="text-xs text-gray-400 font-mono mt-1 truncate max-w-[200px]">
+                  ID: {user.apiKey ? '••••' + user.apiKey.slice(-4) : 'No API Key'}
+              </p>
+          </div>
+      </div>
+      
+      {/* General Settings */}
+      <div className="space-y-2">
+          <h3 className="px-4 text-xs font-bold text-zinc-500 uppercase tracking-widest">Preferences</h3>
+          <div className="bg-[#1C1C1E] rounded-[2rem] border border-white/5 overflow-hidden">
+            <SettingRow 
+                icon={Globe} 
+                title="Language" 
+                value={user.language === 'ar' ? 'العربية' : user.language === 'ru' ? 'Русский' : 'English'} 
+                color="text-purple-400"
+                onClick={() => setUser(u => ({...u, language: u.language === 'en' ? 'ar' : u.language === 'ar' ? 'ru' : 'en'}))}
+            />
+            <div className="h-[1px] bg-white/5 mx-4" />
+            <SettingRow 
+                icon={Coins} 
+                title="Currency" 
+                value={user.currency} 
+                color="text-yellow-400"
+                onClick={() => {
+                    const currencies: Currency[] = ['USD', 'SAR', 'AED', 'RUB'];
+                    const nextIdx = (currencies.indexOf(user.currency) + 1) % currencies.length;
+                    setUser(u => ({...u, currency: currencies[nextIdx]}));
+                }}
+            />
+          </div>
+      </div>
+
+      {/* AI Settings */}
+      <div className="space-y-2">
+          <h3 className="px-4 text-xs font-bold text-zinc-500 uppercase tracking-widest">Intelligence</h3>
+          <div className="bg-[#1C1C1E] rounded-[2rem] border border-white/5 overflow-hidden p-1">
+             <button 
+                onClick={() => setShowKeyInput(!showKeyInput)}
+                className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors rounded-[1.8rem]"
+             >
+                <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-zinc-900 border border-white/5 text-sber-green">
+                        <Key size={18} />
+                    </div>
+                    <div className="text-left">
+                        <span className="font-medium text-gray-200 text-sm block">Gemini API Key</span>
+                        <span className="text-[10px] text-zinc-500 block">Required for AI analysis</span>
+                    </div>
+                </div>
+                <ChevronRight className={`w-4 h-4 text-zinc-600 transition-transform ${showKeyInput ? 'rotate-90' : ''}`} />
+             </button>
+
+             {showKeyInput && (
+                 <div className="px-4 pb-4 animate-in slide-in-from-top-2">
+                     <p className="text-xs text-gray-500 mb-3 leading-relaxed">
+                        {t.change_key_desc}
+                     </p>
+                     <div className="flex gap-2">
+                        <input 
+                            type="password" 
+                            placeholder="Paste new API Key" 
+                            value={editingKey}
+                            onChange={(e) => setEditingKey(e.target.value)}
+                            className="flex-1 bg-black border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-sber-green outline-none"
+                        />
+                        <button 
+                            onClick={handleUpdateApiKey}
+                            disabled={!editingKey || isValidatingKey}
+                            className="bg-white text-black px-4 rounded-xl font-bold text-xs disabled:opacity-50"
+                        >
+                            {isValidatingKey ? <Loader2 className="animate-spin w-4 h-4" /> : 'Save'}
+                        </button>
+                     </div>
+                 </div>
+             )}
+          </div>
+      </div>
+
+      {/* Danger Zone */}
+      <div className="space-y-2 pt-4">
+          <button 
+            onClick={onLogout}
+            className="w-full bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 p-4 rounded-[1.5rem] flex items-center justify-center gap-2 transition-all group"
+          >
+            <LogOut size={18} className="text-red-500" />
+            <span className="font-bold text-red-500 text-sm">{t.sign_out}</span>
+          </button>
+          
+          <div className="text-center pt-4">
+              <p className="text-[10px] text-zinc-600 font-mono">Masareefy v2.0.0 (Premium)</p>
+              <p className="text-[9px] text-zinc-700 mt-1">Built with Gemini & Firebase</p>
+          </div>
+      </div>
+
     </div>
   );
 };
@@ -1459,7 +2022,7 @@ export const Reports: React.FC<Props> = ({ transactions, language }) => {
 ### File: `components\TransactionItem.tsx`
 ```tsx
 import React from 'react';
-import { Transaction, Currency, ExpenseCategory } from '../types';
+import { Transaction, Currency } from '../types';
 import { CATEGORIES } from '../constants';
 import * as Icons from 'lucide-react';
 
@@ -1470,35 +2033,238 @@ interface Props {
 }
 
 export const TransactionItem: React.FC<Props> = ({ transaction, currency, language }) => {
-  const category = CATEGORIES.find(c => c.id === transaction.category) || CATEGORIES[4]; // Default to Utilities
-  // Safer icon resolution with fallback
-  const IconComponent = (Icons as any)[category.icon] || Icons.HelpCircle || Icons.AlertCircle || Icons.Circle;
+  // Find category or default to 'utilities' to prevent crashes
+  const category = CATEGORIES.find(c => c.id === transaction.category) || CATEGORIES.find(c => c.id === 'utilities')!;
+  
+  // Resolve Icon dynamically safely
+  const IconComponent = (Icons as any)[category.icon] || Icons.HelpCircle;
 
   const isExpense = transaction.type === 'expense';
   
-  // Format Date
-  const dateObj = new Date(transaction.date);
-  const dateStr = new Intl.DateTimeFormat(language, { month: 'short', day: 'numeric' }).format(dateObj);
+  // Format Date logic if needed, currently we rely on list grouping headers for date
+  // We can add time if available in ISO string, else just show category name as subtext
+  
+  return (
+    <div className="group relative overflow-hidden bg-[#1C1C1E] hover:bg-[#2C2C2E] rounded-2xl p-4 transition-all duration-300 border border-white/5 hover:border-white/10 active:scale-[0.98]">
+      {/* Decorative Glow Effect on Hover */}
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 pointer-events-none" />
+
+      <div className="flex items-center justify-between relative z-10">
+        <div className="flex items-center gap-4">
+          {/* Icon Box with Dynamic Color Glow */}
+          <div 
+            className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg transition-transform group-hover:scale-110 duration-300"
+            style={{ 
+                background: `linear-gradient(135deg, ${category.color}20, ${category.color}05)`,
+                border: `1px solid ${category.color}30`,
+                boxShadow: `0 4px 12px ${category.color}15`
+            }}
+          >
+            <IconComponent size={22} style={{ color: category.color }} strokeWidth={2.5} />
+          </div>
+          
+          {/* Details */}
+          <div className="flex flex-col">
+            <h3 className="font-bold text-white text-base leading-tight">
+              {transaction.vendor || (language === 'ar' ? category.name_ar : language === 'ru' ? category.name_ru : category.name_en)}
+            </h3>
+            <div className="flex items-center gap-2 mt-1.5">
+                {/* Category Tag */}
+                <span className="text-[10px] text-zinc-400 font-bold bg-zinc-900/80 px-2 py-0.5 rounded-md border border-white/5">
+                    {language === 'ar' ? category.name_ar : language === 'ru' ? category.name_ru : category.name_en}
+                </span>
+                {/* Note truncation */}
+                {transaction.note && (
+                    <span className="text-xs text-zinc-600 truncate max-w-[120px]">• {transaction.note}</span>
+                )}
+            </div>
+          </div>
+        </div>
+
+        {/* Amount */}
+        <div className="text-right">
+            <div className={`font-bold text-lg tabular-nums tracking-tight ${isExpense ? 'text-white' : 'text-sber-green'}`}>
+                {isExpense ? '-' : '+'}{transaction.amount.toLocaleString()} 
+                <span className="text-xs font-medium text-zinc-500 ml-0.5 align-top opacity-70">{currency}</span>
+            </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+```
+---
+
+### File: `components\TransactionsPage.tsx`
+```tsx
+import React, { useState } from 'react';
+import { List, Search, X, Filter, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { Transaction, UserSettings, TransactionType } from '../types';
+import { TRANSLATIONS } from '../constants';
+import { TransactionItem } from './TransactionItem';
+
+interface Props {
+  user: UserSettings;
+  transactions: Transaction[];
+}
+
+type FilterType = 'all' | 'income' | 'expense';
+
+export const TransactionsPage: React.FC<Props> = ({ user, transactions }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState<FilterType>('all');
+  const t = TRANSLATIONS[user.language];
+
+  // Smart Filtering Logic
+  const getFilteredTransactions = () => {
+      return transactions.filter(t => {
+        // 1. Text Search
+        const matchesSearch = !searchTerm || (
+            (t.vendor && t.vendor.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (t.note && t.note.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (t.category && t.category.toLowerCase().includes(searchTerm.toLowerCase()))
+        );
+        // 2. Type Filter
+        const matchesType = filterType === 'all' || t.type === filterType;
+
+        return matchesSearch && matchesType;
+      });
+  };
+
+  const filteredData = getFilteredTransactions();
+
+  // Grouping
+  const getGroupedTransactions = () => {
+    const sorted = [...filteredData].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const groups: Record<string, Transaction[]> = {};
+    sorted.forEach(tx => {
+      const dateKey = tx.date.split('T')[0];
+      if (!groups[dateKey]) groups[dateKey] = [];
+      groups[dateKey].push(tx);
+    });
+    return Object.keys(groups).map(date => ({ date, items: groups[date] }));
+  };
+
+  const FilterChip = ({ type, label, icon: Icon }: { type: FilterType, label: string, icon?: any }) => (
+      <button
+        onClick={() => setFilterType(type)}
+        className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all active:scale-95 border ${
+            filterType === type 
+            ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.2)]' 
+            : 'bg-zinc-900/50 text-gray-400 border-zinc-800 hover:border-zinc-600 hover:bg-zinc-800'
+        }`}
+      >
+        {Icon && <Icon size={14} />}
+        {label}
+      </button>
+  );
 
   return (
-    <div className="flex items-center justify-between p-4 mb-3 bg-sber-card rounded-2xl hover:bg-sber-gray transition-colors">
-      <div className="flex items-center gap-4">
-        <div 
-          className="w-12 h-12 rounded-full flex items-center justify-center text-white shadow-lg"
-          style={{ backgroundColor: category.color }}
-        >
-          {IconComponent ? <IconComponent size={20} /> : <div className="w-5 h-5" />}
-        </div>
-        <div>
-          <h3 className="font-semibold text-white text-base">
-            {transaction.vendor || (language === 'ar' ? category.name_ar : language === 'ru' ? category.name_ru : category.name_en)}
-          </h3>
-          <p className="text-xs text-gray-400">{dateStr} • {transaction.note || ''}</p>
-        </div>
+    <div className="pb-24 min-h-[80vh]">
+      
+      {/* Sticky Header Area */}
+      <div className="sticky top-0 z-30 bg-[#050505]/95 backdrop-blur-xl pb-4 pt-2 -mx-6 px-6 border-b border-white/5 transition-all">
+          <div className="flex flex-col gap-4">
+              {/* Title */}
+              <div className="flex items-center justify-between">
+                 <div className="flex items-center gap-3">
+                    <div className="bg-sber-green/10 p-3 rounded-2xl border border-sber-green/20">
+                        <List className="w-6 h-6 text-sber-green" />
+                    </div>
+                    <div>
+                        <h2 className="text-2xl font-bold text-white leading-none">{t.transactions}</h2>
+                        <p className="text-xs text-gray-400 mt-1">{filteredData.length} records</p>
+                    </div>
+                 </div>
+              </div>
+
+              {/* Search Bar */}
+              <div className="relative group">
+                 <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                    <Search className="w-5 h-5 text-gray-500 group-focus-within:text-sber-green transition-colors" />
+                 </div>
+                 <input 
+                    type="text" 
+                    placeholder={user.language === 'ar' ? "ابحث عن متجر، ملاحظة..." : "Search merchant, notes..."}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full bg-[#1C1C1E] border border-white/5 rounded-2xl py-3 pl-10 pr-10 text-white focus:outline-none focus:border-sber-green/50 transition-all placeholder-zinc-600 shadow-sm"
+                 />
+                 {searchTerm && (
+                     <button onClick={() => setSearchTerm('')} className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-white">
+                         <X className="w-4 h-4" />
+                     </button>
+                 )}
+              </div>
+
+              {/* Filter Chips Row */}
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                 <FilterChip type="all" label={user.language === 'ar' ? 'الكل' : 'All'} icon={Filter} />
+                 <FilterChip type="expense" label={t.expense} icon={ArrowUpRight} />
+                 <FilterChip type="income" label={t.income} icon={ArrowDownLeft} />
+              </div>
+          </div>
       </div>
-      <div className={`font-bold text-base ${isExpense ? 'text-white' : 'text-sber-green'}`}>
-        {isExpense ? '-' : '+'}{transaction.amount.toLocaleString()} <span className="text-xs font-normal text-gray-400">{currency}</span>
+
+      {/* Stats Summary (Conditional) */}
+      {(searchTerm || filterType !== 'all') && (
+        <div className="grid grid-cols-2 gap-3 mt-4 mb-6 animate-in fade-in slide-in-from-top-2">
+            <div className="bg-[#1C1C1E] p-4 rounded-2xl border border-white/5 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-2 opacity-10"><ArrowDownLeft size={40} /></div>
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Total Income</p>
+                <p className="text-sber-green font-bold text-lg tabular-nums">
+                    +{filteredData.filter(t => t.type === 'income').reduce((s,t) => s + t.amount, 0).toLocaleString()}
+                </p>
+            </div>
+            <div className="bg-[#1C1C1E] p-4 rounded-2xl border border-white/5 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-2 opacity-10"><ArrowUpRight size={40} /></div>
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Total Expense</p>
+                <p className="text-white font-bold text-lg tabular-nums">
+                    -{filteredData.filter(t => t.type === 'expense').reduce((s,t) => s + t.amount, 0).toLocaleString()}
+                </p>
+            </div>
+        </div>
+      )}
+      
+      {/* Transactions List */}
+      <div className="mt-4">
+        {getGroupedTransactions().map((group, idx) => {
+            const date = new Date(group.date);
+            return (
+            <div key={group.date} className="mb-6 animate-in slide-in-from-bottom-5 fade-in" style={{animationDelay: `${idx * 50}ms`}}>
+                <div className="flex items-center gap-3 mb-3 pl-1">
+                    <span className="text-xl font-bold text-white tracking-tighter tabular-nums bg-white/10 w-10 h-10 flex items-center justify-center rounded-xl border border-white/5">
+                        {date.getDate()}
+                    </span>
+                    <div className="flex flex-col">
+                        <span className="text-xs text-gray-400 font-bold uppercase tracking-widest">
+                            {date.toLocaleDateString(user.language, { month: 'long' })}
+                        </span>
+                        <span className="text-[10px] text-gray-600 font-bold uppercase">
+                            {date.toLocaleDateString(user.language, { weekday: 'long' })}
+                        </span>
+                    </div>
+                </div>
+                <div className="space-y-3">
+                {group.items.map(tx => (
+                    <TransactionItem key={tx.id} transaction={tx} currency={user.currency} language={user.language} />
+                ))}
+                </div>
+            </div>
+            );
+        })}
       </div>
+      
+      {/* Empty State */}
+      {filteredData.length === 0 && (
+         <div className="flex flex-col items-center justify-center py-20 text-gray-500 opacity-50">
+             <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-4 border border-white/5 border-dashed">
+                <Search size={32} strokeWidth={1.5} />
+             </div>
+             <p className="text-sm font-medium">No transactions found.</p>
+             <p className="text-xs text-gray-600 mt-1">Try adjusting your filters.</p>
+         </div>
+      )}
     </div>
   );
 };
@@ -1510,6 +2276,8 @@ export const TransactionItem: React.FC<Props> = ({ transaction, currency, langua
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
+import { UserSettings, Transaction } from "../types";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -1530,6 +2298,9 @@ const analytics = getAnalytics(app);
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 
+// Initialize Firestore
+const db = getFirestore(app);
+
 export const signInWithGoogle = async () => {
   try {
     const result = await signInWithPopup(auth, googleProvider);
@@ -1548,7 +2319,38 @@ export const logoutUser = async () => {
   }
 };
 
-export { auth };
+// --- Firestore Helpers ---
+
+export const saveUserData = async (uid: string, userData: UserSettings, transactions?: Transaction[]) => {
+  try {
+    await setDoc(doc(db, "users", uid), {
+      settings: userData,
+      // We store transactions in the same doc for simplicity in this version, 
+      // or you could use a subcollection. Storing inside main doc for now to save reads.
+      transactions: transactions || [] 
+    }, { merge: true });
+  } catch (e) {
+    console.error("Error saving user data: ", e);
+  }
+};
+
+export const getUserData = async (uid: string) => {
+  try {
+    const docRef = doc(db, "users", uid);
+    const docSnap = await getDoc(docRef);
+
+    if (docSnap.exists()) {
+      return docSnap.data() as { settings: UserSettings, transactions: Transaction[] };
+    } else {
+      return null;
+    }
+  } catch (e) {
+    console.error("Error fetching user data: ", e);
+    return null;
+  }
+};
+
+export { auth, db };
 ```
 ---
 
@@ -1565,6 +2367,14 @@ export interface ReceiptAnalysisResult {
   type: TransactionType;
 }
 
+export interface MagicInputResult {
+  amount: number;
+  category: string;
+  vendor: string;
+  date: string;
+  type: TransactionType;
+}
+
 export interface OnboardingAnalysisResult {
   currentBalance: number;
   lastSalary: {
@@ -1578,7 +2388,6 @@ export interface OnboardingAnalysisResult {
     category: string;
     type: 'expense' | 'income';
   }[];
-  salaryFrequencyInferred: 'monthly' | 'weekly' | 'bi-weekly';
 }
 
 const fileToGenerativePart = async (file: File) => {
@@ -1603,7 +2412,42 @@ const cleanJson = (text: string) => {
   return text.replace(/```json/g, '').replace(/```/g, '').trim();
 };
 
-// --- New Feature: Deep Financial Analysis ---
+// --- 1. Magic Input Analysis ---
+export const parseMagicInput = async (
+  text: string, 
+  apiKey: string, 
+  language: string
+): Promise<MagicInputResult> => {
+  if (!apiKey) throw new Error("API Key missing");
+  const ai = new GoogleGenAI({ apiKey });
+
+  const prompt = `
+    Analyze this financial text: "${text}".
+    Extract:
+    1. Amount (number)
+    2. Category (infer from context, e.g. "kfc" -> food, "salary" -> salary)
+    3. Vendor (e.g. "KFC", "Uber", "Boss")
+    4. Type (expense or income)
+    5. Date (YYYY-MM-DD) - Default to today ${new Date().toISOString().split('T')[0]} if not specified.
+
+    Language context: ${language}.
+    Categories: food, groceries, transport, housing, utilities, health, education, travel, entertainment, shopping, personal_care, subscriptions, debt, gifts, salary.
+
+    Return JSON: { "amount": number, "category": string, "vendor": string, "type": "expense"|"income", "date": "YYYY-MM-DD" }
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: { parts: [{ text: prompt }] },
+    });
+    return JSON.parse(cleanJson(response.text || '{}')) as MagicInputResult;
+  } catch (e) {
+    throw new Error("Magic input failed");
+  }
+};
+
+// --- 2. Deep Financial Analysis ---
 export const getDeepFinancialAnalysis = async (
   transactions: Transaction[],
   balance: number,
@@ -1614,93 +2458,68 @@ export const getDeepFinancialAnalysis = async (
   if (!apiKey) throw new Error("API Key missing");
   const ai = new GoogleGenAI({ apiKey });
 
-  const expenses = transactions.filter(t => t.type === 'expense');
-  const income = transactions.filter(t => t.type === 'income');
-
-  // Prepare a summary for the prompt (to avoid token limits if many txs)
   const summary = {
     currentBalance: balance,
     currency,
-    totalExpenses: expenses.reduce((sum, t) => sum + t.amount, 0),
-    totalIncome: income.reduce((sum, t) => sum + t.amount, 0),
-    transactionCount: transactions.length,
-    recentTransactions: transactions.slice(0, 20).map(t => ({
+    transactions: transactions.slice(0, 30).map(t => ({
       date: t.date,
       amount: t.amount,
-      category: t.category,
-      vendor: t.vendor,
+      cat: t.category,
       type: t.type
     }))
   };
 
   const prompt = `
-    Act as a professional senior financial advisor. I am providing you with my financial data summary.
+    Act as a senior financial advisor.
+    Data: ${JSON.stringify(summary)}
     
-    Data:
-    ${JSON.stringify(summary, null, 2)}
+    Task: Provide a strict, professional report.
+    1. **Status**: Health check.
+    2. **Burn Rate**: When will money run out?
+    3. **Leaks**: Identify bad spending habits.
+    4. **Advice**: 3 actionable steps.
 
-    Your task is to generate a professional, strict, and constructive report.
-    
-    Structure of the report (Use Markdown):
-    1. **Executive Summary**: Brief health check of my finances.
-    2. **Spending Patterns & Mistakes**: Identify 3 specific mistakes I am making based on the categories and vendors. Be direct.
-    3. **Cash Flow Analysis**: Analyze my income vs expense ratio.
-    4. **Actionable Recommendations**: Give me 3 concrete steps to save money immediately.
-
-    Tone: Professional, slightly strict but helpful.
-    Language: ${language === 'ar' ? 'Arabic' : language === 'ru' ? 'Russian' : 'English'}.
+    Language: ${language === 'ar' ? 'Arabic' : 'English'}.
   `;
 
   try {
-    // Attempt Primary Model
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: { parts: [{ text: prompt }] },
     });
-    return response.text || "Could not generate report.";
+    return response.text || "Report generation failed.";
   } catch (primaryError) {
-    console.warn("Primary model (gemini-3-flash-preview) failed. Switching to fallback (gemini-2.5-flash).", primaryError);
     try {
-      // Attempt Fallback Model
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts: [{ text: prompt }] },
-      });
-      return response.text || "Could not generate report from fallback.";
-    } catch (fallbackError) {
-      console.error("Deep Analysis Error (Both models failed):", fallbackError);
-      throw fallbackError;
-    }
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: { parts: [{ text: prompt }] },
+        });
+        return response.text || "Fallback report failed.";
+    } catch (e) { throw e; }
   }
 };
 
 export const validateApiKey = async (apiKey: string): Promise<boolean> => {
   if (!apiKey) return false;
   const ai = new GoogleGenAI({ apiKey });
-  
   try {
-    // Primary
     await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: { parts: [{ text: 'Test' }] },
     });
     return true;
-  } catch (primaryError) {
-    console.warn("API Key Validation: Primary model failed, trying fallback.", primaryError);
+  } catch {
     try {
-      // Fallback
-      await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts: [{ text: 'Test' }] },
-      });
-      return true;
-    } catch (fallbackError) {
-      console.error("API Key Validation Error (Both models failed):", fallbackError);
-      return false;
-    }
+        await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: { parts: [{ text: 'Test' }] },
+        });
+        return true;
+    } catch { return false; }
   }
 };
 
+// --- 3. Onboarding Analysis ---
 export const analyzeOnboardingData = async (
   balanceFile: File | null,
   salaryFile: File | null,
@@ -1708,77 +2527,54 @@ export const analyzeOnboardingData = async (
   apiKey: string,
   language: string
 ): Promise<OnboardingAnalysisResult> => {
-  
   if (!apiKey) throw new Error("API Key missing");
-
   const ai = new GoogleGenAI({ apiKey });
   const parts: any[] = [];
   
+  // Note: We removed Bank Name extraction as requested. 
+  // We focus heavily on LAST SALARY DATE.
   let promptContext = `
-    You are a financial AI assistant. I am providing you with several images to set up my financial profile.
-    1. The FIRST image provided is my CURRENT BANK BALANCE screenshot. Extract the total available balance.
-    2. The SECOND image provided is my LAST SALARY SLIP/NOTIFICATION. Extract the amount and the date it was received.
-    3. The REMAINING images are RECEIPTS/EXPENSES. Extract the details for each transaction.
-    Based on the salary date and expenses, infer if I am paid monthly, weekly, or bi-weekly.
-    Language context: ${language}.
-    IMPORTANT: Return the result strictly as valid JSON. Do not use Markdown formatting.
-    The categories must be strictly one of: food, groceries, transport, housing, utilities, health, education, travel, gifts.
-    The JSON structure must be:
+    Analyze these financial images for onboarding.
+    1. Image 1 (Balance): Extract the total available balance number.
+    2. Image 2 (Salary Slip/Notif): CRITICAL -> Extract the AMOUNT and the EXACT DATE of payment (YYYY-MM-DD). This date is very important for scheduling.
+    3. Others: Receipts.
+
+    Language: ${language}.
+    Return strictly JSON:
     {
       "currentBalance": number,
       "lastSalary": { "amount": number, "date": "YYYY-MM-DD" },
-      "transactions": [{ "amount": number, "date": "YYYY-MM-DD", "vendor": string, "category": string, "type": "expense" | "income" }],
-      "salaryFrequencyInferred": "monthly" | "weekly" | "bi-weekly"
+      "transactions": [{ "amount": number, "date": "YYYY-MM-DD", "vendor": string, "category": string, "type": "expense" | "income" }]
     }
   `;
 
-  if (balanceFile) {
-    parts.push(await fileToGenerativePart(balanceFile));
-    promptContext += " (Image 1: Balance)";
-  }
-  if (salaryFile) {
-    parts.push(await fileToGenerativePart(salaryFile));
-    promptContext += " (Image 2: Salary)";
-  }
-  for (const file of expenseFiles) {
-    parts.push(await fileToGenerativePart(file));
-  }
-
+  if (balanceFile) parts.push(await fileToGenerativePart(balanceFile));
+  if (salaryFile) parts.push(await fileToGenerativePart(salaryFile));
+  for (const file of expenseFiles) parts.push(await fileToGenerativePart(file));
   parts.push({ text: promptContext });
 
   try {
-    // Primary
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: { parts },
     });
-    const text = response.text;
-    if (!text) throw new Error("No response from primary model");
-    const jsonString = cleanJson(text);
-    const result = JSON.parse(jsonString) as OnboardingAnalysisResult;
+    const result = JSON.parse(cleanJson(response.text || '{}')) as OnboardingAnalysisResult;
     result.transactions = result.transactions.map(t => ({ ...t, category: t.category.toLowerCase() }));
     return result;
   } catch (primaryError) {
-    console.warn("Onboarding Analysis: Primary model failed, trying fallback (gemini-2.5-flash).", primaryError);
     try {
-       // Fallback
-       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts },
-      });
-      const text = response.text;
-      if (!text) throw new Error("No response from fallback model");
-      const jsonString = cleanJson(text);
-      const result = JSON.parse(jsonString) as OnboardingAnalysisResult;
-      result.transactions = result.transactions.map(t => ({ ...t, category: t.category.toLowerCase() }));
-      return result;
-    } catch (fallbackError) {
-       console.error("Onboarding Analysis Error (Both models failed):", fallbackError);
-       throw fallbackError;
-    }
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: { parts },
+        });
+        const result = JSON.parse(cleanJson(response.text || '{}')) as OnboardingAnalysisResult;
+        result.transactions = result.transactions.map(t => ({ ...t, category: t.category.toLowerCase() }));
+        return result;
+    } catch (e) { throw e; }
   }
 };
 
+// --- 4. Receipt Analysis ---
 export const analyzeReceipt = async (
   file: File, 
   apiKey: string,
@@ -1789,51 +2585,37 @@ export const analyzeReceipt = async (
   const imagePart = await fileToGenerativePart(file);
 
   const prompt = `
-    Analyze this receipt image. 
-    Extract the total amount, the date (YYYY-MM-DD format), the vendor/merchant name, and categorize the expense.
-    Determine if it is an INCOME or EXPENSE.
-    The category should be one of: food, groceries, transport, housing, utilities, health, education, travel, gifts. If unsure, use 'utilities'.
-    Language context is ${language}.
-    IMPORTANT: Return the result strictly as valid JSON.
-    {
-      "amount": number,
-      "date": "YYYY-MM-DD",
-      "vendor": string,
-      "category": string,
-      "type": "income" | "expense"
-    }
+    Analyze this receipt/invoice.
+    Extract:
+    1. Amount (number)
+    2. Date (YYYY-MM-DD) - CRITICAL: Look for the transaction date. If it's a salary slip, find the payday.
+    3. Vendor Name
+    4. Category (Infer context: "Payroll/Deposit" -> salary, "McD" -> food)
+    5. Type (income/expense)
+
+    Categories: food, groceries, transport, housing, utilities, health, education, travel, entertainment, shopping, personal_care, subscriptions, debt, gifts, salary.
+
+    Return JSON: { "amount": number, "date": "YYYY-MM-DD", "vendor": string, "category": string, "type": "income"|"expense" }
   `;
 
   try {
-    // Primary
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: { parts: [imagePart, { text: prompt }] },
     });
-    const text = response.text;
-    if (!text) throw new Error("No response from primary AI");
-    const jsonString = cleanJson(text);
-    const result = JSON.parse(jsonString) as ReceiptAnalysisResult;
-    if (result.category) { result.category = result.category.toLowerCase(); }
+    const result = JSON.parse(cleanJson(response.text || '{}')) as ReceiptAnalysisResult;
+    if (result.category) result.category = result.category.toLowerCase();
     return result;
   } catch (primaryError) {
-    console.warn("Receipt Analysis: Primary model failed, trying fallback (gemini-2.5-flash).", primaryError);
     try {
-      // Fallback
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts: [imagePart, { text: prompt }] },
-      });
-      const text = response.text;
-      if (!text) throw new Error("No response from fallback AI");
-      const jsonString = cleanJson(text);
-      const result = JSON.parse(jsonString) as ReceiptAnalysisResult;
-      if (result.category) { result.category = result.category.toLowerCase(); }
-      return result;
-    } catch (fallbackError) {
-      console.error("Gemini Analysis Error (Both models failed):", fallbackError);
-      throw fallbackError;
-    }
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: { parts: [imagePart, { text: prompt }] },
+        });
+        const result = JSON.parse(cleanJson(response.text || '{}')) as ReceiptAnalysisResult;
+        if (result.category) result.category = result.category.toLowerCase();
+        return result;
+    } catch (e) { throw e; }
   }
 };
 ```
@@ -1848,17 +2630,22 @@ GEMINI_API_KEY=PLACEHOLDER_API_KEY
 
 ### File: `App.tsx`
 ```tsx
-import React, { useState, useEffect, useRef } from 'react';
-import { Home, Plus, PieChart as PieIcon, Settings, List, Camera, Upload, LogOut, Globe, Image as ImageIcon, Key, CheckCircle, AlertCircle, Lock } from 'lucide-react';
-import { UserSettings, Transaction, ViewState, Language, Currency, TransactionType, BudgetPlan, RecurringBill } from './types';
-import { CATEGORIES, TRANSLATIONS } from './constants';
-import { analyzeReceipt, OnboardingAnalysisResult, validateApiKey } from './services/geminiService';
-import { logoutUser, auth } from './services/firebase';
-import { TransactionItem } from './components/TransactionItem';
-import { Reports } from './components/Reports';
+import React, { useState, useEffect } from 'react';
+import { Globe } from 'lucide-react';
+import { UserSettings, Transaction, ViewState, TransactionType, BudgetPlan, RecurringBill, WalletType } from './types';
+import { TRANSLATIONS } from './constants';
+import { OnboardingAnalysisResult } from './services/geminiService';
+import { logoutUser, auth, saveUserData } from './services/firebase';
+
+// Components
 import { Dashboard } from './components/Dashboard';
 import { Onboarding } from './components/Onboarding';
 import { AIAdvisor } from './components/AIAdvisor';
+import { Reports } from './components/Reports';
+import { TransactionsPage } from './components/TransactionsPage';
+import { AddTransactionPage } from './components/AddTransactionPage';
+import { SettingsPage } from './components/SettingsPage';
+import { Navigation } from './components/Navigation';
 
 const App = () => {
   // --- State ---
@@ -1872,10 +2659,12 @@ const App = () => {
         language: 'en',
         isOnboarded: false,
         isGuest: false,
-        currentBalance: 0
+        currentBalance: 0,
+        savingsBalance: 0,
+        bankName: 'Bank',
+        salaryInterval: 30
       };
     } catch (e) {
-      console.error("Failed to parse user settings, resetting.", e);
       return {
         name: '',
         apiKey: '',
@@ -1883,7 +2672,10 @@ const App = () => {
         language: 'en',
         isOnboarded: false,
         isGuest: false,
-        currentBalance: 0
+        currentBalance: 0,
+        savingsBalance: 0,
+        bankName: 'Bank',
+        salaryInterval: 30
       };
     }
   });
@@ -1893,27 +2685,25 @@ const App = () => {
       const saved = localStorage.getItem('masareefy_txs');
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
-      console.error("Failed to parse transactions, resetting.", e);
       return [];
     }
   });
 
   const [currentView, setCurrentView] = useState<ViewState>(user.isOnboarded ? 'dashboard' : 'onboarding');
-  const [isAnalyzeLoading, setIsAnalyzeLoading] = useState(false);
-  const [tempTx, setTempTx] = useState<Partial<Transaction>>({ type: TransactionType.EXPENSE });
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Settings State
-  const [editingKey, setEditingKey] = useState('');
-  const [isValidatingKey, setIsValidatingKey] = useState(false);
 
   // --- Effects ---
   useEffect(() => {
     localStorage.setItem('masareefy_user', JSON.stringify(user));
+    if (user.isOnboarded && !user.isGuest && auth.currentUser) {
+        saveUserData(auth.currentUser.uid, user, transactions);
+    }
   }, [user]);
 
   useEffect(() => {
     localStorage.setItem('masareefy_txs', JSON.stringify(transactions));
+    if (user.isOnboarded && !user.isGuest && auth.currentUser) {
+        saveUserData(auth.currentUser.uid, user, transactions);
+    }
   }, [transactions]);
 
   useEffect(() => {
@@ -1922,8 +2712,16 @@ const App = () => {
 
   const t = TRANSLATIONS[user.language];
 
-  // --- Logic ---
+  // --- Logic Handlers ---
+
+  const handleRestoreData = (settings: UserSettings, txs: Transaction[]) => {
+     setUser(settings);
+     setTransactions(txs);
+     setCurrentView('dashboard');
+  };
+
   const handleOnboardingComplete = (result: OnboardingAnalysisResult, nextSalaryDate: string, nextSalaryAmount: number, bills: RecurringBill[]) => {
+    // Note: We use 'spending' wallet for initial balance
     const newTransactions = result.transactions.map((tx, idx) => ({
       id: `init-${idx}`,
       amount: tx.amount,
@@ -1931,51 +2729,55 @@ const App = () => {
       vendor: tx.vendor,
       category: tx.category,
       type: tx.type === 'expense' ? TransactionType.EXPENSE : TransactionType.INCOME,
-      note: 'Imported during setup'
+      wallet: 'spending' as WalletType,
+      note: 'Imported'
     }));
 
     newTransactions.push({
       id: 'init-salary',
       amount: result.lastSalary.amount,
       date: result.lastSalary.date,
-      vendor: 'Employer',
+      vendor: 'Salary Deposit',
       category: 'salary',
       type: TransactionType.INCOME,
-      note: 'Last Salary Slip'
+      wallet: 'spending' as WalletType,
+      note: 'Last Salary'
     });
 
-    setTransactions(newTransactions);
-    setUser(u => ({
-      ...u,
+    const newUserSettings: UserSettings = {
+      ...user,
       isOnboarded: true,
       currentBalance: result.currentBalance,
+      // savingsBalance is set in Onboarding component step
       lastSalaryAmount: result.lastSalary.amount,
       lastSalaryDate: result.lastSalary.date,
-      salaryFrequency: result.salaryFrequencyInferred,
-      nextSalaryAmount: nextSalaryAmount,
       nextSalaryDate: nextSalaryDate,
       recurringBills: bills
-    }));
+    };
+
+    setTransactions(newTransactions);
+    setUser(newUserSettings);
     setCurrentView('dashboard');
+
+    if (auth.currentUser) {
+        saveUserData(auth.currentUser.uid, newUserSettings, newTransactions);
+    }
   };
 
   const handlePlanSelection = (plan: BudgetPlan) => {
     setUser(u => ({ ...u, selectedPlan: plan.type, dailyLimit: plan.dailyLimit }));
-    alert(`You selected the ${plan.type.toUpperCase()} plan. Daily Limit: ${plan.dailyLimit} ${user.currency}`);
+    alert(`Active Plan: ${plan.type.toUpperCase()}`);
   };
 
-  // --- Recurring Bills Logic ---
   const handlePayBill = (billId: string, date: string, deduct: boolean) => {
     const bill = user.recurringBills?.find(b => b.id === billId);
     if (!bill) return;
 
-    // 1. Update User Settings (mark lastPaidDate)
     const updatedBills = user.recurringBills?.map(b => 
        b.id === billId ? { ...b, lastPaidDate: date } : b
     );
     setUser(u => ({ ...u, recurringBills: updatedBills }));
 
-    // 2. Create Transaction if deduct is true
     if (deduct) {
        const newTx: Transaction = {
           id: `bill-${Date.now()}`,
@@ -1983,20 +2785,20 @@ const App = () => {
           date: date,
           category: 'utilities',
           vendor: bill.name,
-          note: 'Fixed Monthly Bill',
+          note: 'Fixed Bill',
           type: TransactionType.EXPENSE,
+          wallet: 'spending',
           isRecurring: true
        };
        setTransactions(prev => [newTx, ...prev]);
+       
+       // Deduct from Spending Balance immediately
+       setUser(prev => ({ ...prev, currentBalance: prev.currentBalance - bill.amount }));
     }
   };
 
   const handleAddBill = (name: string, amount: number) => {
-    const newBill: RecurringBill = {
-        id: Date.now().toString(),
-        name,
-        amount
-    };
+    const newBill: RecurringBill = { id: Date.now().toString(), name, amount };
     setUser(prev => ({
         ...prev,
         recurringBills: [...(prev.recurringBills || []), newBill]
@@ -2004,27 +2806,12 @@ const App = () => {
   };
 
   const handleDeleteBill = (id: string) => {
-    if (confirm('Are you sure you want to delete this bill?')) {
+    if (confirm('Delete this bill?')) {
         setUser(prev => ({
             ...prev,
             recurringBills: (prev.recurringBills || []).filter(b => b.id !== id)
         }));
     }
-  };
-
-  // --- API & Transactions ---
-  const handleUpdateApiKey = async () => {
-    if (!editingKey.trim()) return;
-    setIsValidatingKey(true);
-    const isValid = await validateApiKey(editingKey.trim());
-    if (isValid) {
-      setUser(u => ({ ...u, apiKey: editingKey.trim(), isGuest: false }));
-      alert(t.key_valid_saved);
-      setEditingKey('');
-    } else {
-      alert(t.key_invalid);
-    }
-    setIsValidatingKey(false);
   };
 
   const handleLogout = async () => {
@@ -2034,119 +2821,126 @@ const App = () => {
       window.location.reload();
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (user.isGuest || !user.apiKey) {
-        alert("This feature is disabled in Guest Mode. Please add an API Key in Settings.");
-        return;
-    }
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsAnalyzeLoading(true);
-    try {
-      const result = await analyzeReceipt(file, user.apiKey, user.language);
-      setTempTx({
-        amount: result.amount,
-        date: result.date,
-        vendor: result.vendor,
-        category: result.category || 'utilities',
-        type: result.type as TransactionType || TransactionType.EXPENSE,
-        note: 'Scanned Receipt'
-      });
-    } catch (err) { alert("Analysis failed."); } 
-    finally { setIsAnalyzeLoading(false); }
-  };
-
-  const saveTransaction = () => {
-    if (!tempTx.amount || !tempTx.date) return;
+  // --- THE SMART TRANSACTION HANDLER ---
+  const handleSaveTransaction = (newTx: Transaction, transferAmount: number = 0) => {
     
-    // Check Spending against Plan (if expense and matches today)
-    const todayStr = new Date().toISOString().split('T')[0];
-    if (tempTx.type === TransactionType.EXPENSE && user.dailyLimit && tempTx.date === todayStr) {
-      const todaySpent = transactions
-        .filter(t => t.type === TransactionType.EXPENSE && t.date.startsWith(todayStr))
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-      
-      const newTotal = todaySpent + Number(tempTx.amount);
-      
-      if (newTotal > user.dailyLimit) {
-        alert(`WARNING: This transaction pushes you over your daily limit of ${user.dailyLimit}! Overdraft: ${newTotal - user.dailyLimit}`);
-      } else {
-        const remaining = user.dailyLimit - newTotal;
-        alert(`Great job! You are still under budget. Remaining for today: ${remaining}`);
-      }
+    // 1. Handle Automatic Transfer (Smart Logic)
+    if (transferAmount > 0) {
+        // Create internal transfer records
+        const transferOut: Transaction = {
+            id: `transfer-out-${Date.now()}`,
+            amount: transferAmount,
+            date: newTx.date,
+            category: 'transport', // System category
+            vendor: 'Transfer to Spending',
+            note: 'Auto-cover deficit',
+            type: TransactionType.EXPENSE,
+            wallet: 'savings'
+        };
+        const transferIn: Transaction = {
+            id: `transfer-in-${Date.now()}`,
+            amount: transferAmount,
+            date: newTx.date,
+            category: 'salary',
+            vendor: 'From Savings',
+            note: 'Auto-cover deficit',
+            type: TransactionType.INCOME,
+            wallet: 'spending'
+        };
+        
+        setTransactions(prev => [transferIn, transferOut, ...prev]);
+        
+        // Update Balances
+        setUser(prev => ({
+            ...prev,
+            savingsBalance: prev.savingsBalance - transferAmount,
+            currentBalance: prev.currentBalance + transferAmount
+        }));
     }
 
-    const newTx: Transaction = {
-      id: Date.now().toString(),
-      amount: Number(tempTx.amount),
-      date: tempTx.date,
-      category: tempTx.category || 'utilities',
-      vendor: tempTx.vendor || 'Unknown',
-      note: tempTx.note || '',
-      type: tempTx.type || TransactionType.EXPENSE,
-      isRecurring: false
-    };
+    // 2. Add the Main Transaction
     setTransactions(prev => [newTx, ...prev]);
-    setTempTx({ type: TransactionType.EXPENSE });
+
+    // 3. Update Specific Wallet Balance
+    setUser(prev => {
+        let newSpending = prev.currentBalance;
+        let newSavings = prev.savingsBalance;
+
+        if (newTx.wallet === 'spending') {
+            if (newTx.type === TransactionType.INCOME) newSpending += newTx.amount;
+            else newSpending -= newTx.amount;
+        } else {
+            if (newTx.type === TransactionType.INCOME) newSavings += newTx.amount;
+            else newSavings -= newTx.amount;
+        }
+
+        // 4. Smart Salary Update Logic
+        // If Income added to Spending, assume it's salary or income that resets the cycle
+        // Only if amount is significant (> 100) to avoid small deposits resetting the date
+        let updatedLastSalaryDate = prev.lastSalaryDate;
+        
+        if (newTx.type === TransactionType.INCOME && newTx.wallet === 'spending' && newTx.amount > 100) {
+            updatedLastSalaryDate = newTx.date;
+        }
+
+        return {
+            ...prev,
+            currentBalance: newSpending,
+            savingsBalance: newSavings,
+            lastSalaryDate: updatedLastSalaryDate
+        };
+    });
+
     setCurrentView('dashboard');
   };
 
-  const getGroupedTransactions = () => {
-    const sorted = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    const groups: Record<string, Transaction[]> = {};
-    sorted.forEach(tx => {
-      const dateKey = tx.date.split('T')[0];
-      if (!groups[dateKey]) groups[dateKey] = [];
-      groups[dateKey].push(tx);
-    });
-    return Object.keys(groups).map(date => ({ date, items: groups[date] }));
-  };
-
   if (currentView === 'onboarding') {
-    return <Onboarding user={user} setUser={setUser} onComplete={handleOnboardingComplete} />;
+    return <Onboarding user={user} setUser={setUser} onComplete={handleOnboardingComplete} onRestore={handleRestoreData} />;
   }
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white relative overflow-hidden font-sans selection:bg-sber-green/30">
+    <div className="min-h-screen bg-[#050505] text-white relative overflow-hidden font-sans selection:bg-sber-green/30 pb-32">
       
-      {/* Premium Dynamic Background */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-          <div className="absolute top-[-20%] left-[-20%] w-[80vw] h-[80vw] bg-sber-green/5 rounded-full blur-[150px] opacity-40 animate-pulse"></div>
-          <div className="absolute top-[40%] right-[-20%] w-[60vw] h-[60vw] bg-emerald-900/10 rounded-full blur-[120px] opacity-30"></div>
-          <div className="absolute bottom-[-10%] left-[20%] w-[50vw] h-[50vw] bg-blue-900/5 rounded-full blur-[120px] opacity-20"></div>
+      {/* Background */}
+      <div className="fixed inset-0 z-0 pointer-events-none bg-[#050505]">
+          <div className="absolute top-[-20%] left-[-20%] w-[80vw] h-[80vw] bg-sber-green/5 rounded-full blur-[150px] opacity-30 animate-pulse-slow"></div>
+          <div className="absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-emerald-900/10 rounded-full blur-[120px] opacity-20"></div>
       </div>
 
-      {/* Glass Header */}
-      <div className="sticky top-0 z-40 bg-[#050505]/70 backdrop-blur-xl border-b border-white/5 shadow-sm">
-        <div className="max-w-md mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {user.photoURL ? (
-                <img src={user.photoURL} alt="User" className="w-9 h-9 rounded-xl shadow-lg shadow-sber-green/10 object-cover border border-white/10" />
-            ) : (
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sber-green to-emerald-800 flex items-center justify-center text-sm font-bold shadow-lg shadow-sber-green/10">
-                {user.name.charAt(0) || 'U'}
+      {/* Header */}
+      {currentView !== 'add' && (
+        <div className="sticky top-0 z-40 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5 shadow-sm transition-all duration-300">
+          <div className="max-w-md mx-auto px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {user.photoURL ? (
+                  <img src={user.photoURL} alt="User" className="w-10 h-10 rounded-2xl shadow-lg shadow-black/50 object-cover border border-white/10" />
+              ) : (
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-zinc-800 to-zinc-700 flex items-center justify-center text-sm font-bold shadow-lg shadow-black/50 border border-white/10">
+                  {user.name.charAt(0) || 'U'}
+                  </div>
+              )}
+              <div className="flex flex-col">
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-none mb-1">{t.welcome}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-bold text-base tracking-wide text-white leading-none">{user.name.split(' ')[0]}</p>
+                  {user.isGuest && <span className="text-[9px] bg-yellow-500/10 text-yellow-500 px-1.5 py-0.5 rounded border border-yellow-500/20 font-bold">GUEST</span>}
                 </div>
-            )}
-            <div>
-              <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">{t.welcome}</p>
-              <div className="flex items-center gap-2">
-                 <p className="font-bold text-sm tracking-wide">{user.name}</p>
-                 {user.isGuest && <span className="text-[9px] bg-yellow-500/20 text-yellow-500 px-1.5 rounded font-bold border border-yellow-500/30">GUEST</span>}
               </div>
             </div>
+            <button 
+                onClick={() => setUser(u => ({...u, language: u.language === 'en' ? 'ar' : u.language === 'ar' ? 'ru' : 'en'}))}
+                className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 active:scale-90 transition-all border border-white/5 group"
+            >
+              <Globe className="text-gray-400 group-hover:text-white w-5 h-5 transition-colors" />
+            </button>
           </div>
-          <button 
-              onClick={() => setUser(u => ({...u, language: u.language === 'en' ? 'ar' : u.language === 'ar' ? 'ru' : 'en'}))}
-              className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 transition-colors border border-white/5"
-          >
-            <Globe className="text-sber-green w-5 h-5" />
-          </button>
         </div>
-      </div>
+      )}
 
-      {/* Main Content Area with Transition Key */}
-      <main className="relative z-10 max-w-md mx-auto pb-32">
+      {/* Main Content */}
+      <main className="relative z-10 max-w-md mx-auto">
         <div key={currentView} className="animate-enter px-6 pt-6">
+          
           {currentView === 'dashboard' && (
             <Dashboard 
               user={user} 
@@ -2160,272 +2954,35 @@ const App = () => {
             />
           )}
 
-          {currentView === 'ai-advisor' && (
-            <AIAdvisor user={user} transactions={transactions} onClose={() => setCurrentView('dashboard')} />
+          {currentView === 'transactions' && (
+            <TransactionsPage user={user} transactions={transactions} />
           )}
 
-          {currentView === 'transactions' && (
-            <div className="pb-10">
-              <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-                <List className="w-6 h-6 text-sber-green" />
-                {t.transactions}
-              </h2>
-              {getGroupedTransactions().map(group => {
-                const date = new Date(group.date);
-                return (
-                  <div key={group.date} className="mb-6">
-                    <div className="sticky top-20 z-30 bg-[#050505]/80 backdrop-blur-xl py-2 mb-2 border-b border-white/5 flex items-baseline gap-2">
-                      <span className="text-2xl font-bold text-white tracking-tight">
-                        {date.getDate()}
-                      </span>
-                      <span className="text-xs text-gray-400 uppercase font-bold tracking-wider">
-                        {date.toLocaleDateString(user.language, { month: 'short', weekday: 'short' })}
-                      </span>
-                    </div>
-                    <div className="space-y-2">
-                      {group.items.map(tx => (
-                        <TransactionItem key={tx.id} transaction={tx} currency={user.currency} language={user.language} />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          {currentView === 'add' && (
+            <AddTransactionPage 
+                user={user} 
+                transactions={transactions} 
+                onSave={handleSaveTransaction} 
+                onBack={() => setCurrentView('dashboard')} 
+            />
           )}
 
           {currentView === 'reports' && (
             <Reports transactions={transactions} language={user.language} />
           )}
 
-          {currentView === 'add' && (
-            <div className="pb-10">
-              <h2 className="text-2xl font-bold mb-8 text-center">{tempTx.amount ? 'Review Transaction' : t.add}</h2>
-              
-              {isAnalyzeLoading ? (
-                <div className="flex flex-col items-center justify-center py-24 bg-zinc-900/30 rounded-[2.5rem] border border-white/5 animate-pulse">
-                  <div className="w-20 h-20 border-4 border-sber-green border-t-transparent rounded-full animate-spin mb-6"></div>
-                  <p className="text-sber-green font-medium text-lg">{t.analyzing}</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {/* Amount Display */}
-                  <div className="flex justify-center py-8">
-                    <div className="text-center relative">
-                      <span className="text-zinc-600 text-3xl absolute -left-10 top-2 font-light">{user.currency}</span>
-                      <input 
-                          type="number" 
-                          value={tempTx.amount || ''}
-                          onChange={e => setTempTx({...tempTx, amount: parseFloat(e.target.value)})}
-                          placeholder="0"
-                          className="bg-transparent text-7xl font-bold text-white text-center w-full focus:outline-none placeholder-zinc-800 tracking-tighter"
-                          autoFocus
-                      />
-                    </div>
-                  </div>
-
-                  {!tempTx.amount && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <button 
-                        onClick={() => fileInputRef.current?.click()}
-                        className={`bg-zinc-900/40 backdrop-blur-md p-6 rounded-[2rem] flex flex-col items-center gap-3 border border-zinc-800/50 hover:border-sber-green hover:bg-sber-green/5 transition-all group active:scale-95 ${user.isGuest ? 'opacity-50' : ''}`}
-                      >
-                          <div className="bg-black/50 p-4 rounded-full group-hover:scale-110 transition-transform">
-                              {user.isGuest ? <Lock className="w-8 h-8 text-gray-500" /> : <Camera className="w-8 h-8 text-sber-green" />}
-                          </div>
-                          <span className="font-semibold text-sm text-gray-300 group-hover:text-white">{t.scan_receipt}</span>
-                      </button>
-                      <button 
-                        onClick={() => fileInputRef.current?.click()}
-                        className={`bg-zinc-900/40 backdrop-blur-md p-6 rounded-[2rem] flex flex-col items-center gap-3 border border-zinc-800/50 hover:border-white/20 hover:bg-white/5 transition-all group active:scale-95 ${user.isGuest ? 'opacity-50' : ''}`}
-                      >
-                          <div className="bg-black/50 p-4 rounded-full group-hover:scale-110 transition-transform">
-                             {user.isGuest ? <Lock className="w-8 h-8 text-gray-500" /> : <ImageIcon className="w-8 h-8 text-white" />}
-                          </div>
-                          <span className="font-semibold text-sm text-gray-300 group-hover:text-white">{t.upload_image}</span>
-                      </button>
-                      <input 
-                          type="file" 
-                          accept="image/*" 
-                          ref={fileInputRef}
-                          className="hidden"
-                          onChange={handleFileUpload}
-                      />
-                    </div>
-                  )}
-
-                  <div className="bg-zinc-900/40 backdrop-blur-xl p-5 rounded-[2rem] space-y-5 border border-white/5">
-                    <div className="flex bg-black/50 p-1.5 rounded-2xl">
-                        <button 
-                          onClick={() => setTempTx({...tempTx, type: TransactionType.EXPENSE})}
-                          className={`flex-1 py-3.5 rounded-xl text-sm font-bold transition-all duration-300 ${tempTx.type === 'expense' ? 'bg-zinc-800 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
-                        >
-                          {t.expense}
-                        </button>
-                        <button 
-                          onClick={() => setTempTx({...tempTx, type: TransactionType.INCOME})}
-                          className={`flex-1 py-3.5 rounded-xl text-sm font-bold transition-all duration-300 ${tempTx.type === 'income' ? 'bg-zinc-800 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
-                        >
-                          {t.income}
-                        </button>
-                    </div>
-                    <div className="space-y-4 px-2">
-                          <div className="group">
-                              <label className="text-[10px] text-gray-500 ml-2 mb-1.5 block uppercase tracking-wider font-bold group-focus-within:text-sber-green transition-colors">{t.date}</label>
-                              <input 
-                                  type="date" 
-                                  value={tempTx.date || new Date().toISOString().split('T')[0]}
-                                  onChange={e => setTempTx({...tempTx, date: e.target.value})}
-                                  className="w-full bg-black/50 text-white p-4 rounded-2xl border border-zinc-800/50 focus:border-sber-green focus:outline-none transition-all"
-                              />
-                          </div>
-                          <div className="group">
-                              <label className="text-[10px] text-gray-500 ml-2 mb-1.5 block uppercase tracking-wider font-bold group-focus-within:text-sber-green transition-colors">{t.vendor}</label>
-                              <input 
-                                  type="text"
-                                  placeholder="e.g. Starbucks"
-                                  value={tempTx.vendor || ''}
-                                  onChange={e => setTempTx({...tempTx, vendor: e.target.value})}
-                                  className="w-full bg-black/50 text-white p-4 rounded-2xl border border-zinc-800/50 focus:border-sber-green focus:outline-none transition-all"
-                              />
-                          </div>
-                          <div className="group">
-                              <label className="text-[10px] text-gray-500 ml-2 mb-1.5 block uppercase tracking-wider font-bold group-focus-within:text-sber-green transition-colors">{t.category}</label>
-                              <select 
-                                  value={tempTx.category || ''}
-                                  onChange={e => setTempTx({...tempTx, category: e.target.value})}
-                                  className="w-full bg-black/50 text-white p-4 rounded-2xl border border-zinc-800/50 focus:border-sber-green focus:outline-none appearance-none transition-all"
-                              >
-                                  <option value="" disabled>Select Category</option>
-                                  {CATEGORIES.map(cat => (
-                                  <option key={cat.id} value={cat.id}>
-                                      {user.language === 'ar' ? cat.name_ar : user.language === 'ru' ? cat.name_ru : cat.name_en}
-                                  </option>
-                                  ))}
-                              </select>
-                          </div>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-4 pt-2">
-                    <button 
-                      onClick={() => { setTempTx({ type: TransactionType.EXPENSE }); setCurrentView('dashboard'); }}
-                      className="flex-1 bg-zinc-900 text-white py-4 rounded-2xl font-bold border border-zinc-800 hover:bg-zinc-800 transition-colors active:scale-95"
-                    >
-                      {t.cancel}
-                    </button>
-                    <button 
-                      onClick={saveTransaction}
-                      className="flex-1 bg-sber-green text-white py-4 rounded-2xl font-bold shadow-lg shadow-sber-green/20 hover:bg-green-600 transition-colors active:scale-95"
-                    >
-                      {t.save}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          
           {currentView === 'settings' && (
-            <div className="space-y-6">
-              <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-                <Settings className="w-6 h-6 text-sber-green" />
-                {t.settings}
-              </h2>
-              
-              <div className="bg-zinc-900/50 backdrop-blur-xl rounded-[2rem] p-6 space-y-4 border border-white/10">
-                <div className="flex justify-between items-center p-2 border-b border-white/5 pb-4">
-                  <span className="font-medium text-gray-200">{t.select_currency}</span>
-                  <span className="text-sber-green font-mono bg-sber-green/10 px-3 py-1 rounded-lg border border-sber-green/20">{user.currency}</span>
-                </div>
-                <div className="flex justify-between items-center p-2 pt-2">
-                  <span className="font-medium text-gray-200">Language</span>
-                  <span className="text-white uppercase font-bold tracking-wide">{user.language}</span>
-                </div>
-              </div>
+            <SettingsPage user={user} setUser={setUser} onLogout={handleLogout} />
+          )}
 
-              {/* API Key Management */}
-              <div className="bg-zinc-900/50 backdrop-blur-xl rounded-[2rem] p-6 border border-white/10">
-                <h3 className="font-bold mb-2 flex items-center gap-2 text-white">
-                    <Key className="w-5 h-5 text-sber-green" />
-                    {t.manage_api_key}
-                </h3>
-                <p className="text-xs text-gray-400 mb-6 leading-relaxed">
-                    {user.isGuest ? "Add your API Key to unlock AI features." : t.change_key_desc}
-                </p>
-                
-                <div className="flex flex-col gap-3">
-                    <input 
-                      type="password" 
-                      placeholder="New API Key" 
-                      value={editingKey}
-                      onChange={(e) => setEditingKey(e.target.value)}
-                      className="bg-black border border-zinc-700 p-4 rounded-xl text-sm focus:border-sber-green outline-none transition-colors"
-                    />
-                    <button 
-                      onClick={handleUpdateApiKey}
-                      disabled={!editingKey || isValidatingKey}
-                      className="bg-zinc-800 hover:bg-zinc-700 text-white p-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50 active:scale-95"
-                    >
-                      {isValidatingKey ? (
-                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                      ) : (
-                          <CheckCircle className="w-4 h-4" />
-                      )}
-                      {user.isGuest ? t.add_key : t.update_key}
-                    </button>
-                </div>
-              </div>
-
-              <button 
-                onClick={handleLogout}
-                className="w-full flex items-center justify-center gap-2 text-red-500 p-5 bg-red-500/5 border border-red-500/10 rounded-[2rem] hover:bg-red-500/10 transition-colors font-bold mt-8"
-              >
-                <LogOut size={20} /> {t.sign_out} / Reset
-              </button>
-            </div>
+          {currentView === 'ai-advisor' && (
+            <AIAdvisor user={user} transactions={transactions} onClose={() => setCurrentView('dashboard')} />
           )}
         </div>
       </main>
 
-      {/* Floating Navigation "Island" */}
-      <div className="fixed bottom-6 left-0 right-0 z-50 flex justify-center pointer-events-none">
-         <nav className="bg-[#1C1C1E]/80 backdrop-blur-xl border border-white/10 rounded-[2rem] px-6 py-3 shadow-2xl flex items-center gap-6 pointer-events-auto scale-100 transition-transform duration-300">
-            <button 
-              onClick={() => setCurrentView('dashboard')}
-              className={`flex flex-col items-center gap-1 w-10 transition-all ${currentView === 'dashboard' ? 'text-sber-green scale-110' : 'text-zinc-500 hover:text-white'}`}
-            >
-              <Home size={22} strokeWidth={currentView === 'dashboard' ? 2.5 : 2} />
-            </button>
-
-            <button 
-              onClick={() => setCurrentView('transactions')}
-              className={`flex flex-col items-center gap-1 w-10 transition-all ${currentView === 'transactions' ? 'text-sber-green scale-110' : 'text-zinc-500 hover:text-white'}`}
-            >
-              <List size={22} strokeWidth={currentView === 'transactions' ? 2.5 : 2} />
-            </button>
-
-            <button 
-                onClick={() => setCurrentView('add')}
-                className="w-14 h-14 bg-gradient-to-tr from-sber-green to-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-sber-green/30 hover:scale-105 active:scale-95 transition-transform -mt-6 border-[4px] border-[#050505]"
-            >
-                <Plus size={28} strokeWidth={2.5} />
-            </button>
-
-            <button 
-              onClick={() => setCurrentView('reports')}
-              className={`flex flex-col items-center gap-1 w-10 transition-all ${currentView === 'reports' ? 'text-sber-green scale-110' : 'text-zinc-500 hover:text-white'}`}
-            >
-              <PieIcon size={22} strokeWidth={currentView === 'reports' ? 2.5 : 2} />
-            </button>
-
-            <button 
-              onClick={() => setCurrentView('settings')}
-              className={`flex flex-col items-center gap-1 w-10 transition-all ${currentView === 'settings' ? 'text-sber-green scale-110' : 'text-zinc-500 hover:text-white'}`}
-            >
-              <Settings size={22} strokeWidth={currentView === 'settings' ? 2.5 : 2} />
-            </button>
-         </nav>
-      </div>
+      {/* Navigation */}
+      <Navigation currentView={currentView} onNavigate={setCurrentView} />
     </div>
   );
 };
@@ -2437,20 +2994,40 @@ export default App;
 ### File: `constants.tsx`
 ```tsx
 import { ExpenseCategory } from './types';
-import { ShoppingCart, Utensils, Car, Home, Zap, HeartPulse, GraduationCap, Plane, Gift, Briefcase } from 'lucide-react';
-import React from 'react';
+import { ShoppingCart, Utensils, Car, Home, Zap, HeartPulse, GraduationCap, Plane, Gift, Briefcase, Clapperboard, ShoppingBag, Smile, Repeat, Banknote } from 'lucide-react';
 
 export const CATEGORIES: ExpenseCategory[] = [
   { id: 'food', name_en: 'Food & Dining', name_ar: 'طعام ومطاعم', name_ru: 'Еда и напитки', icon: 'Utensils', color: '#FF9500' },
-  { id: 'groceries', name_en: 'Groceries', name_ar: 'بقالة', name_ru: 'Продукты', icon: 'ShoppingCart', color: '#30D158' },
+  { id: 'groceries', name_en: 'Groceries', name_ar: 'بقالة / سوبرماركت', name_ru: 'Продукты', icon: 'ShoppingCart', color: '#30D158' },
   { id: 'transport', name_en: 'Transport', name_ar: 'نقل ومواصلات', name_ru: 'Транспорт', icon: 'Car', color: '#0A84FF' },
-  { id: 'housing', name_en: 'Housing', name_ar: 'سكن', name_ru: 'Жилье', icon: 'Home', color: '#BF5AF2' },
+  { id: 'housing', name_en: 'Housing', name_ar: 'سكن / إيجار', name_ru: 'Жилье', icon: 'Home', color: '#BF5AF2' },
   { id: 'utilities', name_en: 'Utilities', name_ar: 'فواتير وخدمات', name_ru: 'Коммунальные', icon: 'Zap', color: '#FFD60A' },
-  { id: 'health', name_en: 'Health', name_ar: 'صحة', name_ru: 'Здоровье', icon: 'HeartPulse', color: '#FF375F' },
+  { id: 'health', name_en: 'Health', name_ar: 'صحة وعلاج', name_ru: 'Здоровье', icon: 'HeartPulse', color: '#FF375F' },
   { id: 'education', name_en: 'Education', name_ar: 'تعليم', name_ru: 'Образование', icon: 'GraduationCap', color: '#64D2FF' },
-  { id: 'travel', name_en: 'Travel', name_ar: 'سفر', name_ru: 'Путешествия', icon: 'Plane', color: '#5E5CE6' },
-  { id: 'gifts', name_en: 'Gifts', name_ar: 'هدايا', name_ru: 'Подарки', icon: 'Gift', color: '#FF453A' },
-  { id: 'salary', name_en: 'Salary', name_ar: 'راتب', name_ru: 'Зарплата', icon: 'Briefcase', color: '#21A038' },
+  { id: 'travel', name_en: 'Travel', name_ar: 'سفر وسياحة', name_ru: 'Путешествия', icon: 'Plane', color: '#5E5CE6' },
+  { id: 'entertainment', name_en: 'Entertainment', name_ar: 'ترفيه وتسلية', name_ru: 'Развлечения', icon: 'Clapperboard', color: '#FF2D55' },
+  { id: 'shopping', name_en: 'Shopping', name_ar: 'تسوق وملابس', name_ru: 'Шопинг', icon: 'ShoppingBag', color: '#FF9F0A' },
+  { id: 'personal_care', name_en: 'Personal Care', name_ar: 'عناية شخصية', name_ru: 'Личный уход', icon: 'Smile', color: '#E4A4C3' },
+  { id: 'subscriptions', name_en: 'Subscriptions', name_ar: 'اشتراكات', name_ru: 'Подписки', icon: 'Repeat', color: '#AC8E68' },
+  { id: 'debt', name_en: 'Loans & Debt', name_ar: 'قروض وديون', name_ru: 'Кредиты', icon: 'Banknote', color: '#8E8E93' },
+  { id: 'gifts', name_en: 'Gifts & Charity', name_ar: 'هدايا وتبرعات', name_ru: 'Подарки', icon: 'Gift', color: '#FF453A' },
+  { id: 'salary', name_en: 'Salary / Income', name_ar: 'راتب / دخل', name_ru: 'Зарплата', icon: 'Briefcase', color: '#21A038' },
+];
+
+export const RUSSIAN_BANKS = [
+  { id: 'sber', name: 'Sberbank', color: '#21A038', textColor: '#FFFFFF' },
+  { id: 'tinkoff', name: 'T-Bank', color: '#FFDD2D', textColor: '#000000' },
+  { id: 'alpha', name: 'Alfa-Bank', color: '#EF3124', textColor: '#FFFFFF' },
+  { id: 'vtb', name: 'VTB', color: '#002882', textColor: '#FFFFFF' },
+  { id: 'raiffeisen', name: 'Raiffeisen', color: '#FFF200', textColor: '#000000' },
+  { id: 'gazprom', name: 'Gazprombank', color: '#00468C', textColor: '#FFFFFF' },
+  { id: 'ozon', name: 'Ozon Bank', color: '#005BFF', textColor: '#FFFFFF' },
+  { id: 'yandex', name: 'Yandex Pay', color: '#FC3F1D', textColor: '#FFFFFF' },
+  { id: 'pochta', name: 'Pochta Bank', color: '#13308D', textColor: '#FFFFFF' },
+  { id: 'sovcom', name: 'Sovcombank', color: '#FF4D00', textColor: '#FFFFFF' },
+  { id: 'psb', name: 'PSB', color: '#F26722', textColor: '#FFFFFF' },
+  { id: 'mts', name: 'MTS Bank', color: '#E30611', textColor: '#FFFFFF' },
+  { id: 'other', name: 'Custom Bank', color: '#1C1C1E', textColor: '#FFFFFF' },
 ];
 
 export const TRANSLATIONS = {
@@ -2507,14 +3084,14 @@ export const TRANSLATIONS = {
     recent_transactions: "Recent Transactions",
     scan_receipt: "Scan Receipt",
     manual_add: "Manual Entry",
-    analyzing: "Analyzing Receipt...",
-    save: "Save",
+    analyzing: "AI Analyzing Receipt...",
+    save: "Save Transaction",
     cancel: "Cancel",
     confirm: "Confirm",
     category: "Category",
     amount: "Amount",
     date: "Date",
-    vendor: "Vendor / Source",
+    vendor: "Vendor / Store",
     note: "Note (Optional)",
     ai_insight: "AI Insight",
     insight_good: "Excellent! You are on track.",
@@ -2585,8 +3162,8 @@ export const TRANSLATIONS = {
     recent_transactions: "آخر العمليات",
     scan_receipt: "مسح إيصال",
     manual_add: "إدخال يدوي",
-    analyzing: "جاري تحليل الإيصال...",
-    save: "حفظ",
+    analyzing: "جاري تحليل الإيصال بالذكاء الاصطناعي...",
+    save: "حفظ العملية",
     cancel: "إلغاء",
     confirm: "تأكيد",
     category: "التصنيف",
@@ -2663,7 +3240,7 @@ export const TRANSLATIONS = {
     recent_transactions: "Последние операции",
     scan_receipt: "Скан чека",
     manual_add: "Ручной ввод",
-    analyzing: "Анализ чека...",
+    analyzing: "Анализ чека AI...",
     save: "Сохранить",
     cancel: "Отмена",
     confirm: "Подтвердить",
@@ -2920,21 +3497,24 @@ View your app in AI Studio: https://ai.studio/apps/drive/1M_nvPxzotXGq-FOWN6TG1g
 ### File: `types.ts`
 ```ts
 export type Language = 'en' | 'ar' | 'ru';
-export type Currency = 'USD' | 'SAR' | 'RUB' | 'AED';
+export type Currency = 'USD' | 'SAR' | 'RUB' | 'AED' | 'EGP';
 
 export enum TransactionType {
   INCOME = 'income',
   EXPENSE = 'expense'
 }
 
+export type WalletType = 'spending' | 'savings';
+
 export interface Transaction {
   id: string;
   amount: number;
   category: string;
-  date: string; // ISO string
+  date: string; // ISO string YYYY-MM-DD
   vendor?: string;
   note?: string;
   type: TransactionType;
+  wallet: WalletType;
   isRecurring?: boolean;
 }
 
@@ -2965,13 +3545,24 @@ export interface UserSettings {
   language: Language;
   isOnboarded: boolean;
   isGuest?: boolean;
+  
   // Financial Context
-  currentBalance: number;
+  // Spending Wallet Info
+  spendingBankName: string;
+  spendingBankColor: string;
+  currentBalance: number; 
+  
+  // Savings Wallet Info
+  savingsBankName: string;
+  savingsBankColor: string;
+  savingsBalance: number; 
+  
+  // Salary Logic
   lastSalaryDate?: string;
   lastSalaryAmount?: number;
-  nextSalaryDate?: string;
-  nextSalaryAmount?: number;
-  salaryFrequency?: 'monthly' | 'bi-weekly' | 'weekly';
+  salaryInterval?: number; // Days
+  nextSalaryDate?: string; // Calculated
+  
   // Budgeting
   selectedPlan?: PlanType;
   dailyLimit?: number;
@@ -3025,6 +3616,6 @@ export default defineConfig(({ mode }) => {
 ---
 
 ## 📊 Stats
-- Total Files: 21
-- Total Characters: 129495
-- Estimated Tokens: ~32.374 (GPT-4 Context)
+- Total Files: 25
+- Total Characters: 153737
+- Estimated Tokens: ~38.435 (GPT-4 Context)
