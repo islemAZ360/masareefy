@@ -22,19 +22,16 @@ export const CATEGORIES: ExpenseCategory[] = [
 ];
 
 export const RUSSIAN_BANKS = [
-  { id: 'sber', name: 'Sberbank', color: '#21A038', textColor: '#FFFFFF' },
-  { id: 'tinkoff', name: 'T-Bank', color: '#FFDD2D', textColor: '#000000' },
-  { id: 'alpha', name: 'Alfa-Bank', color: '#EF3124', textColor: '#FFFFFF' },
-  { id: 'vtb', name: 'VTB', color: '#002882', textColor: '#FFFFFF' },
-  { id: 'raiffeisen', name: 'Raiffeisen', color: '#FFF200', textColor: '#000000' },
-  { id: 'gazprom', name: 'Gazprombank', color: '#00468C', textColor: '#FFFFFF' },
-  { id: 'ozon', name: 'Ozon Bank', color: '#005BFF', textColor: '#FFFFFF' },
-  { id: 'pochta', name: 'Pochta Bank', color: '#13308D', textColor: '#FFFFFF' },
-  { id: 'sovcom', name: 'Sovcombank', color: '#FF4D00', textColor: '#FFFFFF' },
-  { id: 'psb', name: 'PSB', color: '#F26722', textColor: '#FFFFFF' },
-  { id: 'mts', name: 'MTS Bank', color: '#E30611', textColor: '#FFFFFF' },
-  { id: 'spb', name: 'Bank St. Petersburg', color: '#D22630', textColor: '#FFFFFF' },
-  { id: 'other', name: 'Custom Bank', color: '#1C1C1E', textColor: '#FFFFFF' },
+  { id: 'sber', name: 'Sberbank', color: '#21A038', textColor: '#FFFFFF', logo: '/banks/sber.png' },
+  { id: 'tinkoff', name: 'T-Bank', color: '#FFDD2D', textColor: '#000000', logo: '/banks/Tinkif.png' },
+  { id: 'alpha', name: 'Alfa-Bank', color: '#EF3124', textColor: '#FFFFFF', logo: '/banks/alpha.png' },
+  { id: 'vtb', name: 'VTB', color: '#002882', textColor: '#FFFFFF', logo: '/banks/vtb.png' },
+  { id: 'gazprom', name: 'Gazprombank', color: '#00468C', textColor: '#FFFFFF', logo: '/banks/gazprom.png' },
+  { id: 'ozon', name: 'Ozon Bank', color: '#005BFF', textColor: '#FFFFFF', logo: '/banks/ozon.png' },
+  { id: 'wb', name: 'Wildberries', color: '#CB11AB', textColor: '#FFFFFF', logo: '/banks/wildberries.png' },
+  { id: 'psb', name: 'PSB', color: '#F26722', textColor: '#FFFFFF', logo: '/banks/psb.png' },
+  { id: 'spb', name: 'Bank St. Petersburg', color: '#D22630', textColor: '#FFFFFF', logo: '/banks/sankt.png' },
+  { id: 'other', name: 'Custom Bank', color: '#1C1C1E', textColor: '#FFFFFF', logo: null },
 ];
 
 export const TRANSLATIONS = {

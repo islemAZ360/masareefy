@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { Settings, Globe, ChevronRight, Key, CheckCircle, LogOut, User, Shield, Coins, AlertTriangle, Loader2, Wallet, PiggyBank, X, Check, Trash2 } from 'lucide-react';
-import { UserSettings, Currency, Language } from '../types';
+import React, { useState, useRef } from 'react';
+import { Settings, Globe, ChevronRight, Key, LogOut, Wallet, PiggyBank, X, Check, Trash2, Loader2, Calculator, Target, Camera, Pencil } from 'lucide-react';
+import { UserSettings, BudgetPlan } from '../types';
 import { TRANSLATIONS, RUSSIAN_BANKS } from '../constants';
 import { validateApiKey } from '../services/geminiService';
 import { deleteUserAccount, auth, signInWithGoogle } from '../services/firebase';
+import { BudgetPlans } from './BudgetPlans';
 
 interface Props {
   user: UserSettings;
@@ -17,12 +18,22 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
   const [isValidatingKey, setIsValidatingKey] = useState(false);
   const [showKeyInput, setShowKeyInput] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Profile Edit State
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [newName, setNewName] = useState(user.name);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Budget Plan Modal
+  const [showPlanModal, setShowPlanModal] = useState(false);
 
   // Wallet Edit State
   const [editingWallet, setEditingWallet] = useState<'spending' | 'savings' | null>(null);
   const [tempBankId, setTempBankId] = useState<string>('sber');
   const [tempName, setTempName] = useState('');
   const [tempColor, setTempColor] = useState('#21A038');
+
+  // --- Handlers ---
 
   const handleUpdateApiKey = async () => {
     if (!editingKey.trim()) return;
@@ -37,6 +48,29 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
       alert(t.key_invalid);
     }
     setIsValidatingKey(false);
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setUser(prev => ({ ...prev, photoURL: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const saveName = () => {
+    if (newName.trim()) {
+      setUser(prev => ({ ...prev, name: newName.trim() }));
+      setIsEditingName(false);
+    }
+  };
+
+  const handlePlanSelection = (plan: BudgetPlan) => {
+    setUser(u => ({ ...u, selectedPlan: plan.type, dailyLimit: plan.dailyLimit }));
+    setShowPlanModal(false);
   };
 
   const openWalletEdit = (type: 'spending' | 'savings') => {
@@ -94,7 +128,6 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
               try {
                   await deleteUserAccount(auth.currentUser.uid);
               } catch (error: any) {
-                  // If deletion fails due to auth timeout, re-authenticate
                   if (error.code === 'auth/requires-recent-login' || error.message?.includes('login')) {
                       const reAuthConfirm = window.confirm(
                           user.language === 'ar' 
@@ -103,9 +136,9 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
                       );
                       
                       if (reAuthConfirm) {
-                          await signInWithGoogle(); // Re-authenticate
+                          await signInWithGoogle();
                           if (auth.currentUser) {
-                              await deleteUserAccount(auth.currentUser.uid); // Retry delete
+                              await deleteUserAccount(auth.currentUser.uid);
                           }
                       } else {
                           setIsDeleting(false);
@@ -117,7 +150,6 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
               }
           }
           
-          // Clear local data and reload
           localStorage.removeItem('masareefy_user');
           localStorage.removeItem('masareefy_txs');
           window.location.reload();
@@ -158,27 +190,62 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
           <h2 className="text-2xl font-bold text-white leading-none">{t.settings}</h2>
       </div>
 
-      {/* Profile Section */}
+      {/* Profile Section (NEW: Editable) */}
       <div className="bg-[#1C1C1E] p-6 rounded-[2rem] border border-white/5 flex items-center gap-4">
-          <div className="relative">
+          <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
             {user.photoURL ? (
-                <img src={user.photoURL} alt="Profile" className="w-16 h-16 rounded-full border-2 border-zinc-800" />
+                <img src={user.photoURL} alt="Profile" className="w-16 h-16 rounded-full border-2 border-zinc-800 object-cover" />
             ) : (
                 <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center border-2 border-zinc-700">
-                    <span className="text-2xl font-bold text-gray-400">{user.name.charAt(0)}</span>
+                    <span className="text-2xl font-bold text-gray-400">{user.name.charAt(0).toUpperCase()}</span>
                 </div>
             )}
+            
+            {/* Camera Overlay */}
+            <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <Camera size={20} className="text-white" />
+            </div>
+
             {user.isGuest && (
-                <div className="absolute -bottom-1 -right-1 bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full border border-black">
+                <div className="absolute -bottom-1 -right-1 bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full border border-black z-10">
                     GUEST
                 </div>
             )}
+            <input 
+                type="file" 
+                ref={fileInputRef} 
+                className="hidden" 
+                accept="image/*" 
+                onChange={handleImageUpload} 
+            />
           </div>
-          <div>
-              <h3 className="text-lg font-bold text-white">{user.name || 'Guest User'}</h3>
-              <p className="text-xs text-gray-400 font-mono mt-1 truncate max-w-[200px]">
-                  ID: {user.apiKey ? '••••' + user.apiKey.slice(-4) : 'No API Key'}
-              </p>
+          
+          <div className="flex-1">
+              {isEditingName ? (
+                  <div className="flex items-center gap-2 animate-in fade-in">
+                      <input 
+                        type="text" 
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        className="bg-black border border-zinc-700 rounded-lg px-2 py-1 text-white font-bold text-lg w-full outline-none focus:border-sber-green"
+                        autoFocus
+                      />
+                      <button onClick={saveName} className="p-1.5 bg-sber-green rounded-md text-white hover:bg-green-600"><Check size={16} /></button>
+                      <button onClick={() => { setIsEditingName(false); setNewName(user.name); }} className="p-1.5 bg-zinc-700 rounded-md text-white hover:bg-zinc-600"><X size={16} /></button>
+                  </div>
+              ) : (
+                  <div>
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2 group">
+                        {user.name || 'Guest User'}
+                        <button onClick={() => setIsEditingName(true)} className="text-zinc-500 hover:text-white transition-colors opacity-0 group-hover:opacity-100">
+                            <Pencil size={14} />
+                        </button>
+                    </h3>
+                    <p className="text-xs text-gray-400 font-mono mt-1 truncate max-w-[200px]">
+                        ID: {user.apiKey ? '••••' + user.apiKey.slice(-4) : 'No API Key'}
+                    </p>
+                  </div>
+              )}
           </div>
       </div>
       
@@ -195,15 +262,29 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
             />
             <div className="h-[1px] bg-white/5 mx-4" />
             <SettingRow 
-                icon={Coins} 
+                icon={Target} 
                 title="Currency" 
                 value={user.currency} 
                 color="text-yellow-400"
                 onClick={() => {
-                    const currencies: Currency[] = ['USD', 'SAR', 'AED', 'RUB'];
+                    const currencies: any[] = ['USD', 'SAR', 'AED', 'RUB'];
                     const nextIdx = (currencies.indexOf(user.currency) + 1) % currencies.length;
                     setUser(u => ({...u, currency: currencies[nextIdx]}));
                 }}
+            />
+          </div>
+      </div>
+
+      {/* Budget & Plans */}
+      <div className="space-y-2">
+          <h3 className="px-4 text-xs font-bold text-zinc-500 uppercase tracking-widest">Budget & Goals</h3>
+          <div className="bg-[#1C1C1E] rounded-[2rem] border border-white/5 overflow-hidden">
+             <SettingRow 
+                icon={Calculator} 
+                title={user.language === 'ar' ? 'خطة الصرف' : 'Budget Plan'}
+                value={user.selectedPlan ? user.selectedPlan.toUpperCase() : 'Not Set'} 
+                color="text-blue-400"
+                onClick={() => setShowPlanModal(true)}
             />
           </div>
       </div>
@@ -324,9 +405,26 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
           </button>
           
           <div className="text-center pt-2">
-              <p className="text-[10px] text-zinc-600 font-mono">Masareefy v2.2.0 (Premium)</p>
+              <p className="text-[10px] text-zinc-600 font-mono">Masareefy v2.4.0 (Premium)</p>
           </div>
       </div>
+
+      {/* Plan Selection Modal */}
+      {showPlanModal && (
+          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4">
+              <div className="absolute inset-0 bg-black/80 backdrop-blur-md transition-opacity" onClick={() => setShowPlanModal(false)} />
+              <div className="relative w-full max-w-lg bg-[#000] border border-white/10 rounded-t-[2rem] sm:rounded-[2rem] p-6 animate-in slide-in-from-bottom-full duration-300 max-h-[90vh] overflow-y-auto">
+                   <div className="w-12 h-1 bg-zinc-700 rounded-full mx-auto mb-6 sm:hidden" />
+                   
+                   <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-xl font-bold text-white">Select a Plan</h3>
+                        <button onClick={() => setShowPlanModal(false)} className="p-2 bg-white/5 rounded-full"><X size={16} /></button>
+                   </div>
+                   
+                   <BudgetPlans user={user} onSelectPlan={handlePlanSelection} />
+              </div>
+          </div>
+      )}
 
       {/* Wallet Edit Modal */}
       {editingWallet && (
@@ -341,7 +439,7 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
                </div>
 
                <div className="space-y-4">
-                  {/* Bank Grid */}
+                  {/* Bank Grid with LOGOS */}
                   <div className="grid grid-cols-4 gap-3 max-h-[300px] overflow-y-auto pr-1">
                       {RUSSIAN_BANKS.filter(b => b.id !== 'other').map(bank => (
                           <button
@@ -353,12 +451,20 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
                               }}
                               className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all border ${tempBankId === bank.id ? 'bg-white/10 border-sber-green scale-105' : 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800'}`}
                           >
-                              <div 
-                                  className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-[10px] shadow-lg"
-                                  style={{ backgroundColor: bank.color, color: bank.textColor }}
-                              >
-                                  {bank.name.substring(0, 2).toUpperCase()}
-                              </div>
+                              {bank.logo ? (
+                                  <img 
+                                    src={bank.logo} 
+                                    alt={bank.name} 
+                                    className="w-10 h-10 rounded-full object-cover shadow-lg bg-white"
+                                  />
+                              ) : (
+                                  <div 
+                                      className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-[10px] shadow-lg"
+                                      style={{ backgroundColor: bank.color, color: bank.textColor }}
+                                  >
+                                      {bank.name.substring(0, 2).toUpperCase()}
+                                  </div>
+                              )}
                               <span className="text-[9px] text-zinc-400 truncate w-full">{bank.name}</span>
                           </button>
                       ))}

@@ -1,5 +1,5 @@
 # Project Code Dump
-Generated: 16/1/2026, 03:09:11
+Generated: 16/1/2026, 04:33:52
 
 ## 🌳 Project Structure
 ```text
@@ -15,6 +15,17 @@ Generated: 16/1/2026, 03:09:11
   ├── SettingsPage.tsx
   ├── TransactionItem.tsx
   └── TransactionsPage.tsx
+├── public
+  └── banks
+    ├── alpha.png
+    ├── gazprom.png
+    ├── ozon.png
+    ├── psb.png
+    ├── sankt.png
+    ├── sber.png
+    ├── Tinkif.png
+    ├── vtb.png
+    └── wildberries.png
 ├── services
   ├── firebase.ts
   └── geminiService.ts
@@ -635,7 +646,7 @@ export const BudgetPlans: React.FC<Props> = ({ user, onSelectPlan }) => {
 import React, { useState, useEffect } from 'react';
 import { UserSettings, Transaction, TransactionType, BudgetPlan, WalletType } from '../types';
 import { TRANSLATIONS } from '../constants';
-import { Wallet, ArrowUpRight, ArrowDownLeft, Sparkles, TrendingUp, CalendarClock, ChevronRight, Zap, PiggyBank, Skull, AlertTriangle, Repeat } from 'lucide-react';
+import { Wallet, ArrowUpRight, ArrowDownLeft, Sparkles, TrendingUp, CalendarClock, ChevronRight, Zap, PiggyBank, Skull, AlertTriangle, Repeat, Pencil, Check, X } from 'lucide-react';
 import { RecurringBills } from './RecurringBills';
 
 interface Props {
@@ -647,16 +658,20 @@ interface Props {
   onPayBill: (billId: string, date: string, deduct: boolean) => void;
   onAddBill: (name: string, amount: number) => void;
   onDeleteBill: (id: string) => void;
+  onUpdateBankName: (wallet: WalletType, newName: string) => void;
 }
 
-export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, onOpenAI, onChangeView, onPayBill, onAddBill, onDeleteBill }) => {
+export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, onOpenAI, onChangeView, onPayBill, onAddBill, onDeleteBill, onUpdateBankName }) => {
   const t = TRANSLATIONS[user.language];
   const [activeCard, setActiveCard] = useState<WalletType>('spending');
+  
+  // Rename Modal State
+  const [renamingWallet, setRenamingWallet] = useState<WalletType | null>(null);
+  const [tempName, setTempName] = useState('');
 
   // --- Logic: Financial Health ---
   const transactionsAfterSnapshot = transactions.filter(t => !t.id.startsWith('init-'));
   
-  // Calculate Wallet Balances
   const calcBalance = (w: WalletType, initial: number) => {
       const inc = transactionsAfterSnapshot.filter(t => t.wallet === w && t.type === 'income').reduce((s, t) => s + t.amount, 0);
       const exp = transactionsAfterSnapshot.filter(t => t.wallet === w && t.type === 'expense').reduce((s, t) => s + t.amount, 0);
@@ -680,9 +695,8 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
   };
   const salaryData = calculateDaysToSalary();
 
-  // --- Logic: Burn Rate & Doom Alert ---
+  // --- Logic: Burn Rate ---
   const calculateBurnRate = () => {
-      // Analyze last 10 days of spending
       const today = new Date();
       const tenDaysAgo = new Date(today.getTime() - 10 * 24 * 60 * 60 * 1000);
       const recentSpent = transactions
@@ -697,61 +711,102 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
   };
   const burnStats = calculateBurnRate();
 
-  // --- Logic: Subscription Detective ---
-  const findPossibleSubscriptions = () => {
-      // Simple heuristic: Same amount repeated > 1 time
+  const detectedSub = (() => {
       const counts: Record<number, number> = {};
       transactions.filter(t => t.type === 'expense').forEach(t => {
           counts[t.amount] = (counts[t.amount] || 0) + 1;
       });
       const subAmount = Object.keys(counts).find(k => counts[Number(k)] > 1 && Number(k) > 0);
       return subAmount ? Number(subAmount) : null;
-  };
-  const detectedSub = findPossibleSubscriptions();
+  })();
 
-
-  // --- Greeting ---
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
 
+  const handleStartRename = (e: React.MouseEvent, type: WalletType, currentName: string) => {
+      e.stopPropagation(); // Stop card flip
+      setRenamingWallet(type);
+      setTempName(currentName);
+  };
+
+  const handleSaveRename = () => {
+      if (renamingWallet && tempName.trim()) {
+          onUpdateBankName(renamingWallet, tempName.trim());
+          setRenamingWallet(null);
+      }
+  };
+
   // --- UI Components ---
   
-  const VisaCard = ({ type, balance, bankName, isActive, onClick }: { type: WalletType, balance: number, bankName: string, isActive: boolean, onClick: () => void }) => (
+  const VisaCard = ({ 
+      type, 
+      balance, 
+      bankName, 
+      bgColor, 
+      textColor, 
+      isActive, 
+      onClick,
+      onEditName
+  }: { 
+      type: WalletType, 
+      balance: number, 
+      bankName: string, 
+      bgColor: string,
+      textColor: string,
+      isActive: boolean, 
+      onClick: () => void,
+      onEditName: (e: React.MouseEvent) => void
+  }) => (
       <div 
         onClick={onClick}
-        className={`absolute inset-0 rounded-[2rem] p-6 flex flex-col justify-between transition-all duration-500 cursor-pointer shadow-2xl border border-white/10 overflow-hidden ${
+        style={{ backgroundColor: bgColor, color: textColor }}
+        className={`absolute inset-0 rounded-[2rem] p-6 flex flex-col justify-between cursor-pointer shadow-2xl border border-white/5 overflow-hidden transition-all duration-700 ease-spring ${
             isActive 
-            ? 'z-20 scale-100 translate-y-0 opacity-100' 
-            : 'z-10 scale-95 -translate-y-4 opacity-60 hover:opacity-80'
-        } ${type === 'spending' ? 'bg-[#1C1C1E]' : 'bg-[#0f2e1b]'}`}
+            ? 'z-20 opacity-100 translate-y-0 scale-100 rotate-0' 
+            : 'z-10 opacity-60 translate-y-4 scale-95 hover:translate-y-2'
+        }`}
       >
-         {/* Noise & Decoration */}
-         <div className="absolute inset-0 opacity-[0.1] mix-blend-overlay" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}></div>
-         {type === 'savings' && <div className="absolute top-0 right-0 w-40 h-40 bg-sber-green/20 blur-[50px] rounded-full"></div>}
-
+         {/* Noise Texture for Realism */}
+         <div className="absolute inset-0 opacity-[0.15] mix-blend-overlay pointer-events-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}></div>
+         
          <div className="relative z-10 flex justify-between items-start">
              <div>
-                <p className="text-zinc-400 text-[10px] font-bold uppercase tracking-widest mb-1">{type === 'spending' ? 'Main Account' : 'Savings Pot'}</p>
-                <h2 className="text-4xl font-extrabold text-white tracking-tighter tabular-nums">
-                    {balance.toLocaleString()} <span className="text-lg text-zinc-500 font-normal">{user.currency}</span>
+                <p className="text-[10px] font-bold uppercase tracking-widest mb-1 opacity-70" style={{ color: textColor }}>
+                    {type === 'spending' ? 'Main Account' : 'Savings Pot'}
+                </p>
+                <h2 className="text-4xl font-extrabold tracking-tighter tabular-nums" style={{ color: textColor }}>
+                    {balance.toLocaleString()} <span className="text-lg font-normal opacity-70">{user.currency}</span>
                 </h2>
              </div>
-             <div className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md border border-white/10 ${type === 'spending' ? 'bg-white/5' : 'bg-sber-green/20'}`}>
-                 {type === 'spending' ? <Wallet className="text-white w-5 h-5" /> : <PiggyBank className="text-sber-green w-5 h-5" />}
+             <div 
+                className="w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md border border-white/10"
+                style={{ backgroundColor: textColor === '#FFFFFF' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
+             >
+                 {type === 'spending' ? <Wallet className="w-5 h-5" style={{ color: textColor }} /> : <PiggyBank className="w-5 h-5" style={{ color: textColor }} />}
              </div>
          </div>
 
          <div className="relative z-10">
              <div className="flex justify-between items-end">
-                 <p className="font-mono text-sm text-zinc-400 tracking-wider">**** **** **** {user.apiKey ? user.apiKey.slice(-4) : '1234'}</p>
-                 <p className="font-bold text-white text-sm">{bankName}</p>
+                 <p className="font-mono text-sm tracking-wider opacity-60" style={{ color: textColor }}>
+                    **** {user.apiKey ? user.apiKey.slice(-4) : '8888'}
+                 </p>
+                 
+                 {/* Clickable Bank Name */}
+                 <button 
+                    onClick={onEditName}
+                    className="flex items-center gap-2 group/edit px-2 py-1 -mr-2 rounded-lg hover:bg-white/10 transition-colors"
+                 >
+                    <span className="font-bold text-sm" style={{ color: textColor }}>{bankName}</span>
+                    <Pencil size={10} style={{ color: textColor }} className="opacity-0 group-hover/edit:opacity-70 transition-opacity" />
+                 </button>
              </div>
          </div>
       </div>
   );
 
   return (
-    <div className="space-y-6 pb-24">
+    <div className="space-y-6 pb-24 relative">
       
       {/* Header */}
       <div className="flex justify-between items-center px-2 pt-2">
@@ -771,20 +826,29 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
       </div>
 
       {/* 1. Stacked Cards Area */}
-      <div className="relative h-[220px] w-full perspective-1000">
+      <div className="relative h-[220px] w-full perspective-1000 group">
+          {/* Savings Card */}
           <VisaCard 
             type="savings" 
             balance={savingsBalance} 
-            bankName={user.bankName} 
+            bankName={user.savingsBankName || 'Savings'} 
+            bgColor={user.savingsBankColor || '#21A038'}
+            textColor={user.savingsTextColor || '#FFFFFF'}
             isActive={activeCard === 'savings'} 
             onClick={() => setActiveCard('savings')}
+            onEditName={(e) => handleStartRename(e, 'savings', user.savingsBankName)}
           />
+          
+          {/* Spending Card */}
           <VisaCard 
             type="spending" 
             balance={spendingBalance} 
-            bankName={user.bankName} 
+            bankName={user.spendingBankName || 'Main Bank'}
+            bgColor={user.spendingBankColor || '#1C1C1E'}
+            textColor={user.spendingTextColor || '#FFFFFF'}
             isActive={activeCard === 'spending'} 
             onClick={() => setActiveCard('spending')}
+            onEditName={(e) => handleStartRename(e, 'spending', user.spendingBankName)}
           />
       </div>
 
@@ -811,7 +875,7 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
           </div>
       )}
 
-      {/* 3. The Doom Alert (Burn Rate) */}
+      {/* 3. The Doom Alert */}
       {burnStats && burnStats.daysToZero < 10 && salaryData && salaryData.days > burnStats.daysToZero && (
           <div className="px-2 animate-bounce-slow">
               <div className={`rounded-2xl p-4 border flex items-start gap-3 ${user.selectedPlan === 'austerity' ? 'bg-red-900/20 border-red-500/50' : 'bg-yellow-900/20 border-yellow-500/50'}`}>
@@ -908,6 +972,26 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
          <RecurringBills user={user} onPayBill={onPayBill} onAddBill={onAddBill} onDeleteBill={onDeleteBill} />
       </div>
 
+      {/* Rename Modal */}
+      {renamingWallet && (
+         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setRenamingWallet(null)} />
+            <div className="relative bg-[#1C1C1E] border border-white/10 w-full max-w-xs rounded-2xl p-4 animate-in zoom-in-95">
+                <h3 className="text-sm font-bold text-white mb-3">Rename {renamingWallet === 'spending' ? 'Main Account' : 'Savings'}</h3>
+                <input 
+                    type="text" 
+                    value={tempName}
+                    onChange={(e) => setTempName(e.target.value)}
+                    className="w-full bg-black p-3 rounded-xl border border-zinc-700 text-white text-sm focus:border-sber-green outline-none mb-3"
+                    autoFocus
+                />
+                <div className="flex gap-2">
+                    <button onClick={() => setRenamingWallet(null)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 py-2 rounded-xl text-xs font-bold text-zinc-400">Cancel</button>
+                    <button onClick={handleSaveRename} className="flex-1 bg-sber-green hover:bg-green-600 py-2 rounded-xl text-xs font-bold text-white">Save</button>
+                </div>
+            </div>
+         </div>
+      )}
     </div>
   );
 };
@@ -969,17 +1053,120 @@ export const Navigation: React.FC<Props> = ({ currentView, onNavigate }) => {
 ```tsx
 import React, { useState, useEffect } from 'react';
 import { UserSettings, Currency, Language, RecurringBill } from '../types';
-import { TRANSLATIONS } from '../constants';
+import { TRANSLATIONS, RUSSIAN_BANKS } from '../constants';
 import { validateApiKey, analyzeOnboardingData, OnboardingAnalysisResult } from '../services/geminiService';
 import { signInWithGoogle, auth, getUserData } from '../services/firebase';
-import { Wallet, Check, ImageIcon, DollarSign, Upload, Zap, ArrowRight, Plus, Trash2, UserCircle2, ChevronLeft, Globe, Key, CheckCircle2, XCircle, Loader2, Building2, PiggyBank, CalendarClock } from 'lucide-react';
+import { Wallet, Check, ImageIcon, DollarSign, Upload, Zap, ArrowRight, Plus, UserCircle2, Key, CheckCircle2, Loader2, Building2, PiggyBank, CalendarClock, ChevronDown } from 'lucide-react';
+
+interface BankDetails {
+    name: string;
+    color: string;
+    textColor: string;
+}
 
 interface Props {
   user: UserSettings;
   setUser: React.Dispatch<React.SetStateAction<UserSettings>>;
-  onComplete: (result: OnboardingAnalysisResult, nextSalaryDate: string, nextSalaryAmount: number, bills: RecurringBill[]) => void;
+  onComplete: (
+      result: OnboardingAnalysisResult, 
+      nextSalaryDate: string, 
+      nextSalaryAmount: number, 
+      bills: RecurringBill[],
+      savingsBalance: number,
+      spendingBank: BankDetails,
+      savingsBank: BankDetails
+  ) => void;
   onRestore: (settings: UserSettings, transactions: any[]) => void;
 }
+
+// Helper: Bank Selector Component
+const BankSelector = ({ 
+    selectedId, 
+    onSelect, 
+    customName, 
+    setCustomName, 
+    customColor, 
+    setCustomColor 
+}: { 
+    selectedId: string, 
+    onSelect: (id: string) => void,
+    customName: string,
+    setCustomName: (s: string) => void,
+    customColor: string,
+    setCustomColor: (s: string) => void
+}) => {
+    const isCustom = selectedId === 'other';
+
+    return (
+        <div className="space-y-4">
+            <div className="grid grid-cols-4 gap-3">
+                {RUSSIAN_BANKS.filter(b => b.id !== 'other').map(bank => (
+                    <button
+                        key={bank.id}
+                        type="button"
+                        onClick={() => onSelect(bank.id)}
+                        className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all border ${selectedId === bank.id ? 'bg-white/10 border-sber-green scale-105' : 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800'}`}
+                    >
+                        {bank.logo ? (
+                            <img 
+                                src={bank.logo} 
+                                alt={bank.name} 
+                                className="w-10 h-10 rounded-full object-cover shadow-lg bg-black"
+                            />
+                        ) : (
+                            <div 
+                                className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-[10px] shadow-lg"
+                                style={{ backgroundColor: bank.color, color: bank.textColor }}
+                            >
+                                {bank.name.substring(0, 2).toUpperCase()}
+                            </div>
+                        )}
+                        <span className="text-[9px] text-zinc-400 truncate w-full">{bank.name}</span>
+                    </button>
+                ))}
+                <button
+                    type="button"
+                    onClick={() => onSelect('other')}
+                    className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all border ${isCustom ? 'bg-white/10 border-sber-green scale-105' : 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800'}`}
+                >
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-[10px] bg-zinc-700 text-white">
+                        ...
+                    </div>
+                    <span className="text-[9px] text-zinc-400">Custom</span>
+                </button>
+            </div>
+
+            {isCustom && (
+                <div className="bg-zinc-900 p-3 rounded-xl border border-zinc-800 animate-in fade-in slide-in-from-top-2 space-y-3">
+                    <div>
+                        <label className="text-[10px] text-zinc-500 uppercase font-bold mb-1 block">Bank Name</label>
+                        <input 
+                            type="text" 
+                            value={customName} 
+                            onChange={e => setCustomName(e.target.value)} 
+                            placeholder="My Bank"
+                            className="w-full bg-black p-2 rounded-lg border border-zinc-700 text-white text-sm focus:border-sber-green outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="text-[10px] text-zinc-500 uppercase font-bold mb-1 block">Card Color</label>
+                        <div className="flex gap-2 overflow-x-auto pb-2">
+                            {['#21A038', '#EF3124', '#002882', '#FFDD2D', '#000000', '#BF5AF2', '#FF9500', '#CB11AB', '#D22630'].map(c => (
+                                <button
+                                    key={c}
+                                    type="button"
+                                    onClick={() => setCustomColor(c)}
+                                    className={`w-8 h-8 rounded-full border-2 transition-transform ${customColor === c ? 'border-white scale-110' : 'border-transparent'}`}
+                                    style={{ backgroundColor: c }}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 // Helper: Smart Calendar Grid
 const SmartCalendar = ({ 
@@ -1045,6 +1232,18 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
   const [isValidating, setIsValidating] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [keyStatus, setKeyStatus] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
+
+  // Spending Bank State - Default Custom/Open
+  const [spendingBankId, setSpendingBankId] = useState<string>('other');
+  const [customSpendingName, setCustomSpendingName] = useState('Main Account');
+  const [customSpendingColor, setCustomSpendingColor] = useState('#1C1C1E');
+  const [showSpendingBankEdit, setShowSpendingBankEdit] = useState(true);
+
+  // Savings Bank State - Default Custom/Open
+  const [savingsBankId, setSavingsBankId] = useState<string>('other');
+  const [customSavingsName, setCustomSavingsName] = useState('Savings Pot');
+  const [customSavingsColor, setCustomSavingsColor] = useState('#21A038');
+  const [showSavingsBankEdit, setShowSavingsBankEdit] = useState(true);
 
   // Files
   const [balanceFile, setBalanceFile] = useState<File | null>(null);
@@ -1117,7 +1316,7 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user.name.trim() || !user.bankName.trim()) return alert("Please fill all fields");
+    if (!user.name.trim()) return alert("Please enter your name");
     if (!user.apiKey.trim()) return alert(t.enter_key);
     
     if (keyStatus === 'valid') { setStep(2); return; }
@@ -1155,23 +1354,38 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
     }
   };
 
+  const resolveBankDetails = (id: string, customName: string, customColor: string): BankDetails => {
+      const bank = RUSSIAN_BANKS.find(b => b.id === id);
+      if (id === 'other' || !bank) {
+          return { name: customName || 'Bank', color: customColor || '#000000', textColor: '#FFFFFF' };
+      }
+      return { name: bank.name, color: bank.color, textColor: bank.textColor };
+  };
+
   const handleFinalize = () => {
       if (!analysisResult) return;
+
+      // Validate Custom Names
+      if (spendingBankId === 'other' && !customSpendingName) return alert("Please enter Spending Bank name.");
+      if (savingsBankId === 'other' && !customSavingsName) return alert("Please enter Savings Bank name.");
       
-      // Calculate Next Date
       const lastDate = new Date(analysisResult.lastSalary.date);
       const nextDate = new Date(lastDate);
       nextDate.setDate(lastDate.getDate() + salaryInterval);
       const nextSalaryDateStr = nextDate.toISOString().split('T')[0];
 
-      // Update User Context with new fields
-      setUser(u => ({
-          ...u,
-          salaryInterval: salaryInterval,
-          savingsBalance: savingsInitial
-      }));
+      const spendingDetails = resolveBankDetails(spendingBankId, customSpendingName, customSpendingColor);
+      const savingsDetails = resolveBankDetails(savingsBankId, customSavingsName, customSavingsColor);
 
-      onComplete(analysisResult, nextSalaryDateStr, analysisResult.lastSalary.amount, recurringBills);
+      onComplete(
+          analysisResult, 
+          nextSalaryDateStr, 
+          analysisResult.lastSalary.amount, 
+          recurringBills,
+          savingsInitial,
+          spendingDetails,
+          savingsDetails
+      );
   };
 
   // --- Render ---
@@ -1217,25 +1431,16 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
           </div>
         )}
 
-        {/* Step 1: Profile & Bank Name */}
+        {/* Step 1: Profile ONLY */}
         {step === 1 && (
-          <div className="w-full max-w-sm animate-in slide-in-from-right duration-300">
+          <div className="w-full max-w-sm animate-in slide-in-from-right duration-300 pb-20">
              <h2 className="text-3xl font-bold mb-2 text-left">{t.enter_name}</h2>
-             <p className="text-zinc-400 mb-8 text-left text-sm">Let's set up your profile and bank.</p>
+             <p className="text-zinc-400 mb-6 text-left text-sm">Let's set up your profile.</p>
              
-             <form onSubmit={handleProfileSubmit} className="space-y-4">
+             <form onSubmit={handleProfileSubmit} className="space-y-5">
               <div className="text-left">
                   <label className="text-xs text-zinc-500 ml-1 mb-2 block uppercase font-bold">{t.enter_name}</label>
                   <input type="text" className="w-full bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800 focus:border-sber-green outline-none text-white" placeholder="John Doe" value={user.name} onChange={e => setUser({...user, name: e.target.value})} required />
-              </div>
-
-              {/* NEW: Bank Name Input */}
-              <div className="text-left">
-                  <label className="text-xs text-zinc-500 ml-1 mb-2 block uppercase font-bold">Bank Name</label>
-                  <div className="relative">
-                    <input type="text" className="w-full bg-zinc-900/50 p-4 pl-12 rounded-2xl border border-zinc-800 focus:border-sber-green outline-none text-white" placeholder="e.g. AlRajhi Bank" value={user.bankName || ''} onChange={e => setUser({...user, bankName: e.target.value})} required />
-                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 w-5 h-5" />
-                  </div>
               </div>
 
               <div className="text-left">
@@ -1271,7 +1476,7 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
           </div>
         )}
 
-        {/* Step 2: Balance */}
+        {/* Step 2-6: Files - No changes */}
         {step === 2 && (
           <div className="w-full max-w-sm animate-in slide-in-from-right">
             <h2 className="text-2xl font-bold mb-2">{t.step_balance}</h2>
@@ -1285,7 +1490,6 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
           </div>
         )}
 
-        {/* Step 3: Salary */}
         {step === 3 && (
           <div className="w-full max-w-sm animate-in slide-in-from-right">
             <h2 className="text-2xl font-bold mb-2">{t.step_salary}</h2>
@@ -1299,7 +1503,6 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
           </div>
         )}
 
-        {/* Step 4: Expenses */}
         {step === 4 && (
           <div className="w-full max-w-sm animate-in slide-in-from-right">
             <h2 className="text-2xl font-bold mb-2">{t.step_expenses}</h2>
@@ -1311,7 +1514,6 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
           </div>
         )}
 
-        {/* Step 5: Recurring */}
         {step === 5 && (
           <div className="w-full max-w-sm animate-in slide-in-from-right">
              <h2 className="text-2xl font-bold mb-6">{t.step_recurring}</h2>
@@ -1331,7 +1533,6 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
           </div>
         )}
 
-        {/* Step 6: Loading */}
         {step === 6 && (
            <div className="flex flex-col items-center justify-center animate-in fade-in">
               <Loader2 className="w-16 h-16 text-sber-green animate-spin mb-4" />
@@ -1343,10 +1544,10 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
         {step === 7 && analysisResult && (
            <div className="w-full max-w-sm animate-in slide-in-from-bottom pb-10">
               <h2 className="text-2xl font-bold mb-1">{t.step_review}</h2>
-              <p className="text-zinc-400 mb-6 text-sm">Configure your cycle and savings.</p>
+              <p className="text-zinc-400 mb-6 text-sm">Configure your cycle and wallets.</p>
               
               <div className="space-y-4">
-                 {/* 1. Balances */}
+                 {/* 1. Spending Wallet Config */}
                  <div className="bg-[#1C1C1E] p-4 rounded-2xl border border-zinc-800 space-y-3">
                     <div className="flex justify-between items-center border-b border-white/5 pb-2">
                         <div className="flex items-center gap-2 text-zinc-400">
@@ -1354,22 +1555,71 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
                         </div>
                         <span className="font-mono font-bold text-white">{analysisResult.currentBalance.toLocaleString()}</span>
                     </div>
-                    <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2 text-sber-green">
+
+                    <div className="pt-2">
+                        <button 
+                        onClick={() => setShowSpendingBankEdit(!showSpendingBankEdit)}
+                        className="w-full flex justify-between items-center text-[10px] text-zinc-500 hover:text-white transition-colors"
+                        >
+                            <span>Bank: <span className="text-white font-bold">{spendingBankId === 'other' ? customSpendingName || 'Custom' : RUSSIAN_BANKS.find(b => b.id === spendingBankId)?.name}</span></span>
+                            <ChevronDown size={12} className={`transition-transform ${showSpendingBankEdit ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {showSpendingBankEdit && (
+                            <div className="mt-3 border-t border-white/5 pt-3">
+                                <BankSelector 
+                                selectedId={spendingBankId}
+                                onSelect={setSpendingBankId}
+                                customName={customSpendingName}
+                                setCustomName={setCustomSpendingName}
+                                customColor={customSpendingColor}
+                                setCustomColor={setCustomSpendingColor}
+                                />
+                            </div>
+                        )}
+                    </div>
+                 </div>
+                 
+                 {/* 2. Savings Wallet Config */}
+                 <div className="bg-[#1C1C1E] p-4 rounded-2xl border border-zinc-800 space-y-3">
+                    <div className="flex justify-between items-center mb-2">
+                            <div className="flex items-center gap-2 text-sber-green">
                             <PiggyBank size={16} /> <span className="text-xs font-bold uppercase">Savings</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <input 
-                                type="number" 
-                                value={savingsInitial} 
-                                onChange={e => setSavingsInitial(Number(e.target.value))}
-                                className="bg-black/50 text-white w-20 text-right p-1 rounded-md text-sm border border-zinc-700 outline-none focus:border-sber-green"
-                            />
-                        </div>
+                        <input 
+                            type="number" 
+                            value={savingsInitial} 
+                            onChange={e => setSavingsInitial(Number(e.target.value))}
+                            className="bg-black/50 text-white w-24 text-right p-1 rounded-md text-sm border border-zinc-700 outline-none focus:border-sber-green"
+                            placeholder="0.00"
+                        />
+                    </div>
+                    
+                    <div className="border-t border-white/5 pt-2 mt-2">
+                            <button 
+                            onClick={() => setShowSavingsBankEdit(!showSavingsBankEdit)}
+                            className="w-full flex justify-between items-center text-[10px] text-zinc-500 hover:text-white transition-colors"
+                            >
+                                <span>Bank: <span className="text-white font-bold">{savingsBankId === 'other' ? customSavingsName || 'Custom' : RUSSIAN_BANKS.find(b => b.id === savingsBankId)?.name}</span></span>
+                                <ChevronDown size={12} className={`transition-transform ${showSavingsBankEdit ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {showSavingsBankEdit && (
+                                <div className="mt-3">
+                                    <BankSelector 
+                                    selectedId={savingsBankId}
+                                    onSelect={setSavingsBankId}
+                                    customName={customSavingsName}
+                                    setCustomName={setCustomSavingsName}
+                                    customColor={customSavingsColor}
+                                    setCustomColor={setCustomSavingsColor}
+                                    />
+                                </div>
+                            )}
                     </div>
                  </div>
 
-                 {/* 2. Smart Salary Interval */}
+                 {/* 3. Salary Cycle */}
                  <div className="bg-[#1C1C1E] p-4 rounded-2xl border border-zinc-800">
                     <div className="flex items-center gap-2 mb-4">
                         <CalendarClock className="text-purple-400 w-5 h-5" />
@@ -1393,7 +1643,6 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
                         />
                     </div>
 
-                    {/* 3. Visual Calendar Animation */}
                     <SmartCalendar lastSalaryDate={analysisResult.lastSalary.date} interval={salaryInterval} />
                  </div>
 
@@ -1840,10 +2089,11 @@ export const Reports: React.FC<Props> = ({ transactions, language }) => {
 ### File: `components\SettingsPage.tsx`
 ```tsx
 import React, { useState } from 'react';
-import { Settings, Globe, ChevronRight, Key, CheckCircle, LogOut, User, Shield, Coins, AlertTriangle, Loader2 } from 'lucide-react';
+import { Settings, Globe, ChevronRight, Key, CheckCircle, LogOut, User, Shield, Coins, AlertTriangle, Loader2, Wallet, PiggyBank, X, Check, Trash2 } from 'lucide-react';
 import { UserSettings, Currency, Language } from '../types';
-import { TRANSLATIONS } from '../constants';
+import { TRANSLATIONS, RUSSIAN_BANKS } from '../constants';
 import { validateApiKey } from '../services/geminiService';
+import { deleteUserAccount, auth, signInWithGoogle } from '../services/firebase';
 
 interface Props {
   user: UserSettings;
@@ -1856,6 +2106,13 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
   const [editingKey, setEditingKey] = useState('');
   const [isValidatingKey, setIsValidatingKey] = useState(false);
   const [showKeyInput, setShowKeyInput] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Wallet Edit State
+  const [editingWallet, setEditingWallet] = useState<'spending' | 'savings' | null>(null);
+  const [tempBankId, setTempBankId] = useState<string>('sber');
+  const [tempName, setTempName] = useState('');
+  const [tempColor, setTempColor] = useState('#21A038');
 
   const handleUpdateApiKey = async () => {
     if (!editingKey.trim()) return;
@@ -1870,6 +2127,96 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
       alert(t.key_invalid);
     }
     setIsValidatingKey(false);
+  };
+
+  const openWalletEdit = (type: 'spending' | 'savings') => {
+      setEditingWallet(type);
+      const currentName = type === 'spending' ? user.spendingBankName : user.savingsBankName;
+      const currentColor = type === 'spending' ? user.spendingBankColor : user.savingsBankColor;
+      
+      const preset = RUSSIAN_BANKS.find(b => b.name === currentName && b.color === currentColor);
+      if (preset) {
+          setTempBankId(preset.id);
+          setTempName('');
+          setTempColor(preset.color);
+      } else {
+          setTempBankId('other');
+          setTempName(currentName);
+          setTempColor(currentColor);
+      }
+  };
+
+  const saveWalletChanges = () => {
+      if (!editingWallet) return;
+      
+      const bank = RUSSIAN_BANKS.find(b => b.id === tempBankId);
+      const finalName = bank && tempBankId !== 'other' ? bank.name : tempName;
+      const finalColor = bank && tempBankId !== 'other' ? bank.color : tempColor;
+      const finalTextColor = bank && tempBankId !== 'other' ? bank.textColor : '#FFFFFF';
+
+      if (!finalName) return alert("Please enter a bank name");
+
+      setUser(prev => ({
+          ...prev,
+          [editingWallet === 'spending' ? 'spendingBankName' : 'savingsBankName']: finalName,
+          [editingWallet === 'spending' ? 'spendingBankColor' : 'savingsBankColor']: finalColor,
+          [editingWallet === 'spending' ? 'spendingTextColor' : 'savingsTextColor']: finalTextColor,
+      }));
+      
+      setEditingWallet(null);
+  };
+
+  const handleDeleteAccount = async () => {
+      const confirmMsg1 = user.language === 'ar' 
+        ? "هل أنت متأكد أنك تريد حذف حسابك؟ لا يمكن التراجع عن هذا الإجراء." 
+        : "Are you sure you want to delete your account? This action cannot be undone.";
+      
+      const confirmMsg2 = user.language === 'ar'
+        ? "سيتم حذف جميع بياناتك ومعاملاتك نهائياً. هل تؤكد الحذف؟"
+        : "All your data and transactions will be permanently lost. Confirm deletion?";
+
+      if (!window.confirm(confirmMsg1)) return;
+      if (!window.confirm(confirmMsg2)) return;
+
+      setIsDeleting(true);
+      try {
+          if (!user.isGuest && auth.currentUser) {
+              try {
+                  await deleteUserAccount(auth.currentUser.uid);
+              } catch (error: any) {
+                  // If deletion fails due to auth timeout, re-authenticate
+                  if (error.code === 'auth/requires-recent-login' || error.message?.includes('login')) {
+                      const reAuthConfirm = window.confirm(
+                          user.language === 'ar' 
+                          ? "لحماية أمانك، يرجى إعادة تسجيل الدخول لتأكيد الحذف." 
+                          : "For security, please sign in again to confirm deletion."
+                      );
+                      
+                      if (reAuthConfirm) {
+                          await signInWithGoogle(); // Re-authenticate
+                          if (auth.currentUser) {
+                              await deleteUserAccount(auth.currentUser.uid); // Retry delete
+                          }
+                      } else {
+                          setIsDeleting(false);
+                          return;
+                      }
+                  } else {
+                      throw error;
+                  }
+              }
+          }
+          
+          // Clear local data and reload
+          localStorage.removeItem('masareefy_user');
+          localStorage.removeItem('masareefy_txs');
+          window.location.reload();
+          
+      } catch (error) {
+          console.error("Delete failed:", error);
+          alert(user.language === 'ar' ? "فشل حذف الحساب." : "Failed to delete account.");
+          setIsDeleting(false);
+      }
   };
 
   const SettingRow = ({ icon: Icon, title, value, onClick, color = "text-gray-400" }: any) => (
@@ -1951,6 +2298,54 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
           </div>
       </div>
 
+      {/* Wallet Management */}
+      <div className="space-y-2">
+          <h3 className="px-4 text-xs font-bold text-zinc-500 uppercase tracking-widest">Wallets</h3>
+          <div className="bg-[#1C1C1E] rounded-[2rem] border border-white/5 overflow-hidden">
+             {/* Spending Wallet Row */}
+             <button 
+                onClick={() => openWalletEdit('spending')}
+                className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors group"
+             >
+                <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-zinc-900 border border-white/5 text-white">
+                        <Wallet size={18} />
+                    </div>
+                    <div className="text-left">
+                        <span className="font-medium text-gray-200 text-sm block">Main Wallet</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: user.spendingBankColor }}></div>
+                             <span className="text-[10px] text-zinc-500">{user.spendingBankName}</span>
+                        </div>
+                    </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-white transition-colors" />
+             </button>
+
+             <div className="h-[1px] bg-white/5 mx-4" />
+
+             {/* Savings Wallet Row */}
+             <button 
+                onClick={() => openWalletEdit('savings')}
+                className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors group"
+             >
+                <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-zinc-900 border border-white/5 text-sber-green">
+                        <PiggyBank size={18} />
+                    </div>
+                    <div className="text-left">
+                        <span className="font-medium text-gray-200 text-sm block">Savings Pot</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: user.savingsBankColor }}></div>
+                             <span className="text-[10px] text-zinc-500">{user.savingsBankName}</span>
+                        </div>
+                    </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-white transition-colors" />
+             </button>
+          </div>
+      </div>
+
       {/* AI Settings */}
       <div className="space-y-2">
           <h3 className="px-4 text-xs font-bold text-zinc-500 uppercase tracking-widest">Intelligence</h3>
@@ -1998,21 +2393,115 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
       </div>
 
       {/* Danger Zone */}
-      <div className="space-y-2 pt-4">
+      <div className="space-y-3 pt-4">
           <button 
             onClick={onLogout}
+            className="w-full bg-[#1C1C1E] border border-white/5 hover:bg-white/10 p-4 rounded-[1.5rem] flex items-center justify-center gap-2 transition-all group"
+          >
+            <LogOut size={18} className="text-zinc-400 group-hover:text-white" />
+            <span className="font-bold text-zinc-400 group-hover:text-white text-sm">{t.sign_out}</span>
+          </button>
+
+          <button 
+            onClick={handleDeleteAccount}
+            disabled={isDeleting}
             className="w-full bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 p-4 rounded-[1.5rem] flex items-center justify-center gap-2 transition-all group"
           >
-            <LogOut size={18} className="text-red-500" />
-            <span className="font-bold text-red-500 text-sm">{t.sign_out}</span>
+            {isDeleting ? <Loader2 size={18} className="animate-spin text-red-500" /> : <Trash2 size={18} className="text-red-500" />}
+            <span className="font-bold text-red-500 text-sm">
+                {user.language === 'ar' ? "حذف الحساب نهائياً" : "Delete Account Permanently"}
+            </span>
           </button>
           
-          <div className="text-center pt-4">
-              <p className="text-[10px] text-zinc-600 font-mono">Masareefy v2.0.0 (Premium)</p>
-              <p className="text-[9px] text-zinc-700 mt-1">Built with Gemini & Firebase</p>
+          <div className="text-center pt-2">
+              <p className="text-[10px] text-zinc-600 font-mono">Masareefy v2.2.0 (Premium)</p>
           </div>
       </div>
 
+      {/* Wallet Edit Modal */}
+      {editingWallet && (
+         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4">
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-md transition-opacity" onClick={() => setEditingWallet(null)} />
+            <div className="relative w-full max-w-sm bg-[#1C1C1E] border border-white/10 rounded-t-[2rem] sm:rounded-[2rem] p-6 animate-in slide-in-from-bottom-full duration-300">
+               <div className="w-12 h-1 bg-zinc-700 rounded-full mx-auto mb-6 sm:hidden" />
+               
+               <div className="flex items-center justify-between mb-6">
+                   <h3 className="text-xl font-bold text-white">Edit {editingWallet === 'spending' ? 'Main Wallet' : 'Savings'}</h3>
+                   <button onClick={() => setEditingWallet(null)} className="p-2 bg-white/5 rounded-full"><X size={16} /></button>
+               </div>
+
+               <div className="space-y-4">
+                  {/* Bank Grid */}
+                  <div className="grid grid-cols-4 gap-3 max-h-[300px] overflow-y-auto pr-1">
+                      {RUSSIAN_BANKS.filter(b => b.id !== 'other').map(bank => (
+                          <button
+                              key={bank.id}
+                              onClick={() => {
+                                  setTempBankId(bank.id);
+                                  setTempName(bank.name);
+                                  setTempColor(bank.color);
+                              }}
+                              className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all border ${tempBankId === bank.id ? 'bg-white/10 border-sber-green scale-105' : 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800'}`}
+                          >
+                              <div 
+                                  className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-[10px] shadow-lg"
+                                  style={{ backgroundColor: bank.color, color: bank.textColor }}
+                              >
+                                  {bank.name.substring(0, 2).toUpperCase()}
+                              </div>
+                              <span className="text-[9px] text-zinc-400 truncate w-full">{bank.name}</span>
+                          </button>
+                      ))}
+                      <button
+                          onClick={() => setTempBankId('other')}
+                          className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all border ${tempBankId === 'other' ? 'bg-white/10 border-sber-green scale-105' : 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800'}`}
+                      >
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-[10px] bg-zinc-700 text-white">
+                              ...
+                          </div>
+                          <span className="text-[9px] text-zinc-400">Custom</span>
+                      </button>
+                  </div>
+
+                  {/* Custom Inputs */}
+                  {tempBankId === 'other' && (
+                      <div className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 space-y-3 animate-in fade-in">
+                          <div>
+                              <label className="text-[10px] text-zinc-500 uppercase font-bold mb-1 block">Bank Name</label>
+                              <input 
+                                  type="text" 
+                                  value={tempName} 
+                                  onChange={e => setTempName(e.target.value)} 
+                                  placeholder="My Bank"
+                                  className="w-full bg-black p-3 rounded-xl border border-zinc-700 text-white text-sm focus:border-sber-green outline-none"
+                              />
+                          </div>
+                          <div>
+                              <label className="text-[10px] text-zinc-500 uppercase font-bold mb-1 block">Card Color</label>
+                              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                                  {['#21A038', '#EF3124', '#002882', '#FFDD2D', '#000000', '#BF5AF2', '#FF9500'].map(c => (
+                                      <button
+                                          key={c}
+                                          onClick={() => setTempColor(c)}
+                                          className={`w-8 h-8 rounded-full border-2 transition-transform ${tempColor === c ? 'border-white scale-110' : 'border-transparent'}`}
+                                          style={{ backgroundColor: c }}
+                                      />
+                                  ))}
+                              </div>
+                          </div>
+                      </div>
+                  )}
+
+                  <button 
+                      onClick={saveWalletChanges}
+                      className="w-full bg-sber-green text-white font-bold py-4 rounded-xl mt-2 flex items-center justify-center gap-2"
+                  >
+                      <Check size={18} /> Save Changes
+                  </button>
+               </div>
+            </div>
+         </div>
+      )}
     </div>
   );
 };
@@ -2033,16 +2522,13 @@ interface Props {
 }
 
 export const TransactionItem: React.FC<Props> = ({ transaction, currency, language }) => {
-  // Find category or default to 'utilities' to prevent crashes
-  const category = CATEGORIES.find(c => c.id === transaction.category) || CATEGORIES.find(c => c.id === 'utilities')!;
+  // Find category or default to 'general' to prevent misleading 'utilities' fallback
+  const category = CATEGORIES.find(c => c.id === transaction.category) || CATEGORIES.find(c => c.id === 'general') || CATEGORIES[0];
   
   // Resolve Icon dynamically safely
   const IconComponent = (Icons as any)[category.icon] || Icons.HelpCircle;
 
   const isExpense = transaction.type === 'expense';
-  
-  // Format Date logic if needed, currently we rely on list grouping headers for date
-  // We can add time if available in ISO string, else just show category name as subtext
   
   return (
     <div className="group relative overflow-hidden bg-[#1C1C1E] hover:bg-[#2C2C2E] rounded-2xl p-4 transition-all duration-300 border border-white/5 hover:border-white/10 active:scale-[0.98]">
@@ -2276,7 +2762,7 @@ export const TransactionsPage: React.FC<Props> = ({ user, transactions }) => {
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { UserSettings, Transaction } from "../types";
 
 // Your web app's Firebase configuration
@@ -2347,6 +2833,22 @@ export const getUserData = async (uid: string) => {
   } catch (e) {
     console.error("Error fetching user data: ", e);
     return null;
+  }
+};
+
+export const deleteUserAccount = async (uid: string) => {
+  try {
+    // 1. Delete Firestore Data
+    await deleteDoc(doc(db, "users", uid));
+
+    // 2. Delete Auth User
+    const user = auth.currentUser;
+    if (user) {
+      await user.delete();
+    }
+  } catch (error) {
+    console.error("Error deleting account", error);
+    throw error;
   }
 };
 
@@ -2425,13 +2927,20 @@ export const parseMagicInput = async (
     Analyze this financial text: "${text}".
     Extract:
     1. Amount (number)
-    2. Category (infer from context, e.g. "kfc" -> food, "salary" -> salary)
+    2. Category (Infer strictly from the list below).
     3. Vendor (e.g. "KFC", "Uber", "Boss")
     4. Type (expense or income)
     5. Date (YYYY-MM-DD) - Default to today ${new Date().toISOString().split('T')[0]} if not specified.
 
     Language context: ${language}.
-    Categories: food, groceries, transport, housing, utilities, health, education, travel, entertainment, shopping, personal_care, subscriptions, debt, gifts, salary.
+    
+    ALLOWED CATEGORIES (IDs):
+    food, groceries, transport, housing, utilities, health, education, travel, entertainment, shopping, personal_care, subscriptions, debt, gifts, salary, transfer, general.
+
+    RULES:
+    - If it's a utility bill (electricity, internet, water), use 'utilities'.
+    - If it doesn't fit specific categories, use 'general'.
+    - Do NOT invent new categories.
 
     Return JSON: { "amount": number, "category": string, "vendor": string, "type": "expense"|"income", "date": "YYYY-MM-DD" }
   `;
@@ -2531,15 +3040,21 @@ export const analyzeOnboardingData = async (
   const ai = new GoogleGenAI({ apiKey });
   const parts: any[] = [];
   
-  // Note: We removed Bank Name extraction as requested. 
-  // We focus heavily on LAST SALARY DATE.
   let promptContext = `
     Analyze these financial images for onboarding.
     1. Image 1 (Balance): Extract the total available balance number.
-    2. Image 2 (Salary Slip/Notif): CRITICAL -> Extract the AMOUNT and the EXACT DATE of payment (YYYY-MM-DD). This date is very important for scheduling.
-    3. Others: Receipts.
+    2. Image 2 (Salary Slip/Notif): CRITICAL -> Extract the AMOUNT and the EXACT DATE of payment (YYYY-MM-DD).
+    3. Others: Receipts/Expenses.
 
     Language: ${language}.
+    
+    ALLOWED CATEGORIES for transactions:
+    food, groceries, transport, housing, utilities, health, education, travel, entertainment, shopping, personal_care, subscriptions, debt, gifts, salary, transfer, general.
+
+    RULES:
+    - Map expenses STRICTLY to the list above.
+    - Use 'general' if unclear. Do NOT default to 'utilities' unless it's a bill.
+
     Return strictly JSON:
     {
       "currentBalance": number,
@@ -2588,12 +3103,18 @@ export const analyzeReceipt = async (
     Analyze this receipt/invoice.
     Extract:
     1. Amount (number)
-    2. Date (YYYY-MM-DD) - CRITICAL: Look for the transaction date. If it's a salary slip, find the payday.
+    2. Date (YYYY-MM-DD)
     3. Vendor Name
-    4. Category (Infer context: "Payroll/Deposit" -> salary, "McD" -> food)
+    4. Category (Choose STRICTLY from the list below).
     5. Type (income/expense)
 
-    Categories: food, groceries, transport, housing, utilities, health, education, travel, entertainment, shopping, personal_care, subscriptions, debt, gifts, salary.
+    ALLOWED CATEGORIES:
+    food, groceries, transport, housing, utilities, health, education, travel, entertainment, shopping, personal_care, subscriptions, debt, gifts, salary, transfer, general.
+
+    CRITICAL RULES:
+    - Use 'utilities' ONLY for: Electricity, Water, Internet, Phone bills.
+    - Use 'food' for restaurants, 'groceries' for supermarkets.
+    - If unsure, use 'general'.
 
     Return JSON: { "amount": number, "date": "YYYY-MM-DD", "vendor": string, "category": string, "type": "income"|"expense" }
   `;
@@ -2661,7 +3182,13 @@ const App = () => {
         isGuest: false,
         currentBalance: 0,
         savingsBalance: 0,
-        bankName: 'Bank',
+        spendingBankName: 'Main Bank',
+        spendingBankColor: '#1C1C1E',
+        spendingTextColor: '#FFFFFF',
+        savingsBankName: 'Savings',
+        savingsBankColor: '#21A038',
+        savingsTextColor: '#FFFFFF',
+        lastSalaryDate: undefined,
         salaryInterval: 30
       };
     } catch (e) {
@@ -2674,7 +3201,13 @@ const App = () => {
         isGuest: false,
         currentBalance: 0,
         savingsBalance: 0,
-        bankName: 'Bank',
+        spendingBankName: 'Main Bank',
+        spendingBankColor: '#1C1C1E',
+        spendingTextColor: '#FFFFFF',
+        savingsBankName: 'Savings',
+        savingsBankColor: '#21A038',
+        savingsTextColor: '#FFFFFF',
+        lastSalaryDate: undefined,
         salaryInterval: 30
       };
     }
@@ -2720,8 +3253,15 @@ const App = () => {
      setCurrentView('dashboard');
   };
 
-  const handleOnboardingComplete = (result: OnboardingAnalysisResult, nextSalaryDate: string, nextSalaryAmount: number, bills: RecurringBill[]) => {
-    // Note: We use 'spending' wallet for initial balance
+  const handleOnboardingComplete = (
+      result: OnboardingAnalysisResult, 
+      nextSalaryDate: string, 
+      nextSalaryAmount: number, 
+      bills: RecurringBill[],
+      savingsBalance: number,
+      spendingBank: { name: string, color: string, textColor: string },
+      savingsBank: { name: string, color: string, textColor: string }
+  ) => {
     const newTransactions = result.transactions.map((tx, idx) => ({
       id: `init-${idx}`,
       amount: tx.amount,
@@ -2744,11 +3284,30 @@ const App = () => {
       note: 'Last Salary'
     });
 
+    if (savingsBalance > 0) {
+        newTransactions.push({
+            id: 'init-savings',
+            amount: savingsBalance,
+            date: new Date().toISOString().split('T')[0],
+            vendor: 'Initial Savings',
+            category: 'salary',
+            type: TransactionType.INCOME,
+            wallet: 'savings' as WalletType,
+            note: 'Initial Balance'
+        });
+    }
+
     const newUserSettings: UserSettings = {
       ...user,
       isOnboarded: true,
       currentBalance: result.currentBalance,
-      // savingsBalance is set in Onboarding component step
+      savingsBalance: savingsBalance,
+      spendingBankName: spendingBank.name,
+      spendingBankColor: spendingBank.color,
+      spendingTextColor: spendingBank.textColor,
+      savingsBankName: savingsBank.name,
+      savingsBankColor: savingsBank.color,
+      savingsTextColor: savingsBank.textColor,
       lastSalaryAmount: result.lastSalary.amount,
       lastSalaryDate: result.lastSalary.date,
       nextSalaryDate: nextSalaryDate,
@@ -2767,6 +3326,14 @@ const App = () => {
   const handlePlanSelection = (plan: BudgetPlan) => {
     setUser(u => ({ ...u, selectedPlan: plan.type, dailyLimit: plan.dailyLimit }));
     alert(`Active Plan: ${plan.type.toUpperCase()}`);
+  };
+
+  // --- NEW: Update Bank Name Handler ---
+  const handleUpdateBankName = (wallet: WalletType, newName: string) => {
+      setUser(prev => ({
+          ...prev,
+          [wallet === 'spending' ? 'spendingBankName' : 'savingsBankName']: newName
+      }));
   };
 
   const handlePayBill = (billId: string, date: string, deduct: boolean) => {
@@ -2791,8 +3358,6 @@ const App = () => {
           isRecurring: true
        };
        setTransactions(prev => [newTx, ...prev]);
-       
-       // Deduct from Spending Balance immediately
        setUser(prev => ({ ...prev, currentBalance: prev.currentBalance - bill.amount }));
     }
   };
@@ -2821,17 +3386,14 @@ const App = () => {
       window.location.reload();
   };
 
-  // --- THE SMART TRANSACTION HANDLER ---
   const handleSaveTransaction = (newTx: Transaction, transferAmount: number = 0) => {
     
-    // 1. Handle Automatic Transfer (Smart Logic)
     if (transferAmount > 0) {
-        // Create internal transfer records
         const transferOut: Transaction = {
             id: `transfer-out-${Date.now()}`,
             amount: transferAmount,
             date: newTx.date,
-            category: 'transport', // System category
+            category: 'transfer',
             vendor: 'Transfer to Spending',
             note: 'Auto-cover deficit',
             type: TransactionType.EXPENSE,
@@ -2841,7 +3403,7 @@ const App = () => {
             id: `transfer-in-${Date.now()}`,
             amount: transferAmount,
             date: newTx.date,
-            category: 'salary',
+            category: 'transfer',
             vendor: 'From Savings',
             note: 'Auto-cover deficit',
             type: TransactionType.INCOME,
@@ -2850,7 +3412,6 @@ const App = () => {
         
         setTransactions(prev => [transferIn, transferOut, ...prev]);
         
-        // Update Balances
         setUser(prev => ({
             ...prev,
             savingsBalance: prev.savingsBalance - transferAmount,
@@ -2858,10 +3419,8 @@ const App = () => {
         }));
     }
 
-    // 2. Add the Main Transaction
     setTransactions(prev => [newTx, ...prev]);
 
-    // 3. Update Specific Wallet Balance
     setUser(prev => {
         let newSpending = prev.currentBalance;
         let newSavings = prev.savingsBalance;
@@ -2874,9 +3433,6 @@ const App = () => {
             else newSavings -= newTx.amount;
         }
 
-        // 4. Smart Salary Update Logic
-        // If Income added to Spending, assume it's salary or income that resets the cycle
-        // Only if amount is significant (> 100) to avoid small deposits resetting the date
         let updatedLastSalaryDate = prev.lastSalaryDate;
         
         if (newTx.type === TransactionType.INCOME && newTx.wallet === 'spending' && newTx.amount > 100) {
@@ -2900,14 +3456,11 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white relative overflow-hidden font-sans selection:bg-sber-green/30 pb-32">
-      
-      {/* Background */}
       <div className="fixed inset-0 z-0 pointer-events-none bg-[#050505]">
           <div className="absolute top-[-20%] left-[-20%] w-[80vw] h-[80vw] bg-sber-green/5 rounded-full blur-[150px] opacity-30 animate-pulse-slow"></div>
           <div className="absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-emerald-900/10 rounded-full blur-[120px] opacity-20"></div>
       </div>
 
-      {/* Header */}
       {currentView !== 'add' && (
         <div className="sticky top-0 z-40 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5 shadow-sm transition-all duration-300">
           <div className="max-w-md mx-auto px-6 py-4 flex items-center justify-between">
@@ -2937,10 +3490,8 @@ const App = () => {
         </div>
       )}
 
-      {/* Main Content */}
       <main className="relative z-10 max-w-md mx-auto">
         <div key={currentView} className="animate-enter px-6 pt-6">
-          
           {currentView === 'dashboard' && (
             <Dashboard 
               user={user} 
@@ -2951,6 +3502,7 @@ const App = () => {
               onPayBill={handlePayBill}
               onAddBill={handleAddBill}
               onDeleteBill={handleDeleteBill}
+              onUpdateBankName={handleUpdateBankName} // Pass the handler
             />
           )}
 
@@ -2981,7 +3533,6 @@ const App = () => {
         </div>
       </main>
 
-      {/* Navigation */}
       <Navigation currentView={currentView} onNavigate={setCurrentView} />
     </div>
   );
@@ -2994,7 +3545,7 @@ export default App;
 ### File: `constants.tsx`
 ```tsx
 import { ExpenseCategory } from './types';
-import { ShoppingCart, Utensils, Car, Home, Zap, HeartPulse, GraduationCap, Plane, Gift, Briefcase, Clapperboard, ShoppingBag, Smile, Repeat, Banknote } from 'lucide-react';
+import { ShoppingCart, Utensils, Car, Home, Zap, HeartPulse, GraduationCap, Plane, Gift, Briefcase, Clapperboard, ShoppingBag, Smile, Repeat, Banknote, ArrowRightLeft, LayoutGrid } from 'lucide-react';
 
 export const CATEGORIES: ExpenseCategory[] = [
   { id: 'food', name_en: 'Food & Dining', name_ar: 'طعام ومطاعم', name_ru: 'Еда и напитки', icon: 'Utensils', color: '#FF9500' },
@@ -3012,22 +3563,21 @@ export const CATEGORIES: ExpenseCategory[] = [
   { id: 'debt', name_en: 'Loans & Debt', name_ar: 'قروض وديون', name_ru: 'Кредиты', icon: 'Banknote', color: '#8E8E93' },
   { id: 'gifts', name_en: 'Gifts & Charity', name_ar: 'هدايا وتبرعات', name_ru: 'Подарки', icon: 'Gift', color: '#FF453A' },
   { id: 'salary', name_en: 'Salary / Income', name_ar: 'راتب / دخل', name_ru: 'Зарплата', icon: 'Briefcase', color: '#21A038' },
+  { id: 'transfer', name_en: 'Transfer', name_ar: 'تحويلات مالية', name_ru: 'Переводы', icon: 'ArrowRightLeft', color: '#8E8E93' },
+  { id: 'general', name_en: 'General / Other', name_ar: 'عام / أخرى', name_ru: 'Разное', icon: 'LayoutGrid', color: '#9CA3AF' },
 ];
 
 export const RUSSIAN_BANKS = [
-  { id: 'sber', name: 'Sberbank', color: '#21A038', textColor: '#FFFFFF' },
-  { id: 'tinkoff', name: 'T-Bank', color: '#FFDD2D', textColor: '#000000' },
-  { id: 'alpha', name: 'Alfa-Bank', color: '#EF3124', textColor: '#FFFFFF' },
-  { id: 'vtb', name: 'VTB', color: '#002882', textColor: '#FFFFFF' },
-  { id: 'raiffeisen', name: 'Raiffeisen', color: '#FFF200', textColor: '#000000' },
-  { id: 'gazprom', name: 'Gazprombank', color: '#00468C', textColor: '#FFFFFF' },
-  { id: 'ozon', name: 'Ozon Bank', color: '#005BFF', textColor: '#FFFFFF' },
-  { id: 'yandex', name: 'Yandex Pay', color: '#FC3F1D', textColor: '#FFFFFF' },
-  { id: 'pochta', name: 'Pochta Bank', color: '#13308D', textColor: '#FFFFFF' },
-  { id: 'sovcom', name: 'Sovcombank', color: '#FF4D00', textColor: '#FFFFFF' },
-  { id: 'psb', name: 'PSB', color: '#F26722', textColor: '#FFFFFF' },
-  { id: 'mts', name: 'MTS Bank', color: '#E30611', textColor: '#FFFFFF' },
-  { id: 'other', name: 'Custom Bank', color: '#1C1C1E', textColor: '#FFFFFF' },
+  { id: 'sber', name: 'Sberbank', color: '#21A038', textColor: '#FFFFFF', logo: '/banks/sber.png' },
+  { id: 'tinkoff', name: 'T-Bank', color: '#FFDD2D', textColor: '#000000', logo: '/banks/Tinkif.png' },
+  { id: 'alpha', name: 'Alfa-Bank', color: '#EF3124', textColor: '#FFFFFF', logo: '/banks/alpha.png' },
+  { id: 'vtb', name: 'VTB', color: '#002882', textColor: '#FFFFFF', logo: '/banks/vtb.png' },
+  { id: 'gazprom', name: 'Gazprombank', color: '#00468C', textColor: '#FFFFFF', logo: '/banks/gazprom.png' },
+  { id: 'ozon', name: 'Ozon Bank', color: '#005BFF', textColor: '#FFFFFF', logo: '/banks/ozon.png' },
+  { id: 'wb', name: 'Wildberries', color: '#CB11AB', textColor: '#FFFFFF', logo: '/banks/wildberries.png' },
+  { id: 'psb', name: 'PSB', color: '#F26722', textColor: '#FFFFFF', logo: '/banks/psb.png' },
+  { id: 'spb', name: 'Bank St. Petersburg', color: '#D22630', textColor: '#FFFFFF', logo: '/banks/sankt.png' },
+  { id: 'other', name: 'Custom Bank', color: '#1C1C1E', textColor: '#FFFFFF', logo: null },
 ];
 
 export const TRANSLATIONS = {
@@ -3053,6 +3603,7 @@ export const TRANSLATIONS = {
     step_expenses_desc: "Upload multiple receipts to learn your spending habits.",
     step_recurring: "Fixed Monthly Bills",
     step_recurring_desc: "Add your fixed bills like Rent, Internet, Netflix, etc.",
+    step_recurring_empty: "No bills added yet.",
     step_review: "Review & Plan",
     upload_image: "Upload Image",
     upload_images: "Upload Images",
@@ -3131,6 +3682,7 @@ export const TRANSLATIONS = {
     step_expenses_desc: "ارفع عدة صور لفواتير سابقة لفهم نمط إنفاقك.",
     step_recurring: "مصاريف شهرية ثابتة",
     step_recurring_desc: "أضف المصاريف الثابتة مثل الإيجار، الإنترنت، الاشتراكات.",
+    step_recurring_empty: "لم تتم إضافة فواتير بعد.",
     step_review: "المراجعة والتخطيط",
     upload_image: "رفع صورة",
     upload_images: "رفع صور",
@@ -3209,6 +3761,7 @@ export const TRANSLATIONS = {
     step_expenses_desc: "Загрузите чеки расходов для анализа привычек.",
     step_recurring: "Фиксированные расходы",
     step_recurring_desc: "Добавьте аренду, интернет, подписки и т.д.",
+    step_recurring_empty: "Счета еще не добавлены.",
     step_review: "Обзор и план",
     upload_image: "Загрузить фото",
     upload_images: "Загрузить фото",
@@ -3550,11 +4103,13 @@ export interface UserSettings {
   // Spending Wallet Info
   spendingBankName: string;
   spendingBankColor: string;
+  spendingTextColor: string;
   currentBalance: number; 
   
   // Savings Wallet Info
   savingsBankName: string;
   savingsBankColor: string;
+  savingsTextColor: string;
   savingsBalance: number; 
   
   // Salary Logic
@@ -3617,5 +4172,5 @@ export default defineConfig(({ mode }) => {
 
 ## 📊 Stats
 - Total Files: 25
-- Total Characters: 153737
-- Estimated Tokens: ~38.435 (GPT-4 Context)
+- Total Characters: 180353
+- Estimated Tokens: ~45.089 (GPT-4 Context)
