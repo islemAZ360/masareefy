@@ -2,12 +2,18 @@ import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, Tooltip, YAxis, CartesianGrid, Area, AreaChart } from 'recharts';
 import { Transaction, Language } from '../types';
 import { CATEGORIES, TRANSLATIONS } from '../constants';
-import { AlertTriangle, TrendingUp, DollarSign, PieChart as PieIcon, ArrowRight } from 'lucide-react';
+import { AlertTriangle, TrendingUp, DollarSign, PieChart as PieIcon, ArrowRight, TrendingDown, Layers } from 'lucide-react';
 
 interface Props {
   transactions: Transaction[];
   language: Language;
 }
+
+const GlassCard = ({ children, className = '' }: { children: React.ReactNode, className?: string }) => (
+    <div className={`bg-[#121214]/80 backdrop-blur-xl border border-white/5 rounded-[2rem] p-6 shadow-xl ${className}`}>
+        {children}
+    </div>
+);
 
 export const Reports: React.FC<Props> = ({ transactions, language }) => {
   const t = TRANSLATIONS[language];
@@ -19,14 +25,14 @@ export const Reports: React.FC<Props> = ({ transactions, language }) => {
   // Group by Category
   const dataMap = expenses.reduce((acc, curr) => {
     const amount = Number(curr.amount);
-    const catKey = curr.category || 'utilities';
+    const catKey = curr.category || 'general';
     acc[catKey] = (acc[catKey] || 0) + amount;
     return acc;
   }, {} as Record<string, number>);
 
   const pieData = Object.keys(dataMap).map(catId => {
-    const category = CATEGORIES.find(c => c.id === catId) || CATEGORIES[4];
-    const name = language === 'ar' ? category.name_ar : category.name_en;
+    const category = CATEGORIES.find(c => c.id === catId) || CATEGORIES.find(c => c.id === 'general') || CATEGORIES[0];
+    const name = language === 'ar' ? category.name_ar : language === 'ru' ? category.name_ru : category.name_en;
     return {
       name,
       value: dataMap[catId],
@@ -49,6 +55,7 @@ export const Reports: React.FC<Props> = ({ transactions, language }) => {
     const dateObj = new Date(dateStr);
     return {
       name: new Intl.DateTimeFormat(language, { weekday: 'short' }).format(dateObj),
+      fullDate: dateStr,
       amount: dayTotal
     };
   });
@@ -56,156 +63,182 @@ export const Reports: React.FC<Props> = ({ transactions, language }) => {
   const hasData = expenses.length > 0;
   const topCategory = pieData.length > 0 ? pieData[0] : null;
 
+  // Custom Tooltip for Charts
+  const CustomTooltip = ({ active, payload, label }: any) => {
+      if (active && payload && payload.length) {
+          return (
+              <div className="bg-black/90 border border-white/10 p-3 rounded-xl shadow-2xl backdrop-blur-md">
+                  <p className="text-xs text-zinc-400 font-bold mb-1">{label}</p>
+                  <p className="text-white font-bold text-sm">
+                      {Number(payload[0].value).toLocaleString()}
+                  </p>
+              </div>
+          );
+      }
+      return null;
+  };
+
   return (
     <div className="space-y-6 pb-24">
       
       {/* Header */}
-      <div className="flex items-center gap-3 px-2 mb-2">
-         <div className="bg-sber-green/10 p-3 rounded-2xl border border-sber-green/20">
+      <div className="flex items-center gap-3 px-2 mb-2 pt-4">
+         <div className="bg-sber-green/10 p-3 rounded-2xl border border-sber-green/20 shadow-[0_0_15px_rgba(33,160,56,0.2)]">
              <PieIcon className="w-6 h-6 text-sber-green" />
          </div>
-         <h2 className="text-2xl font-bold text-white leading-none">{t.reports}</h2>
+         <h2 className="text-3xl font-bold text-white leading-none tracking-tight">{t.reports}</h2>
       </div>
 
-      {/* 1. Smart Insight Card (The "Headline") */}
-      {hasData && topCategory && (
-        <div className="bg-gradient-to-br from-[#1C1C1E] to-black p-6 rounded-[2rem] border border-white/5 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-full blur-[40px] opacity-50 group-hover:opacity-100 transition-opacity"></div>
-            
-            <div className="relative z-10">
-                <div className="flex items-center gap-2 mb-2 text-red-400">
-                    <AlertTriangle size={16} />
-                    <span className="text-xs font-bold uppercase tracking-widest">Top Spending</span>
-                </div>
-                <div className="flex items-end justify-between">
-                    <div>
-                        <h3 className="text-3xl font-bold text-white mb-1">{topCategory.name}</h3>
-                        <p className="text-sm text-gray-400">
-                            {((topCategory.value / totalExpenses) * 100).toFixed(0)}% of your expenses
-                        </p>
+      {hasData ? (
+          <>
+            {/* 1. Hero Stats Row */}
+            <div className="grid grid-cols-2 gap-3 px-1">
+                {/* Total Spent */}
+                <GlassCard className="relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
+                        <TrendingDown size={48} />
                     </div>
-                    <div className="text-right">
-                        <p className="text-2xl font-mono font-bold text-white">{topCategory.value.toLocaleString()}</p>
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Total Spent</p>
+                    <h3 className="text-2xl font-bold text-white tabular-nums tracking-tight">
+                        {totalExpenses.toLocaleString()}
+                    </h3>
+                    <div className="mt-2 text-[10px] text-zinc-500 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span> Expense
                     </div>
-                </div>
-                <div className="w-full bg-zinc-800 h-2 rounded-full mt-4 overflow-hidden">
-                    <div 
-                        className="h-full bg-red-500 rounded-full shadow-[0_0_10px_rgba(239,68,68,0.5)]" 
-                        style={{ width: `${(topCategory.value / totalExpenses) * 100}%` }}
-                    />
-                </div>
-            </div>
-        </div>
-      )}
+                </GlassCard>
 
-      {/* 2. Donut Chart Section */}
-      <div className="bg-[#1C1C1E] p-6 rounded-[2rem] border border-white/5">
-        <h3 className="font-bold text-white mb-6 flex items-center gap-2">
-            <DollarSign className="w-5 h-5 text-sber-green" /> Spending Distribution
-        </h3>
-        
-        {hasData ? (
-            <div className="flex flex-col md:flex-row items-center gap-8">
-                {/* Chart */}
-                <div className="h-[220px] w-[220px] relative">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                            <Pie
-                                data={pieData}
-                                innerRadius={70}
-                                outerRadius={100}
-                                paddingAngle={5}
-                                dataKey="value"
-                                cornerRadius={8}
-                                stroke="none"
-                            >
-                                {pieData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.color} />
-                                ))}
-                            </Pie>
-                            <Tooltip 
-                                contentStyle={{ backgroundColor: '#000', borderRadius: '12px', border: '1px solid #333' }}
-                                itemStyle={{ color: '#fff' }}
-                                formatter={(value: number) => value.toLocaleString()}
-                            />
-                        </PieChart>
-                    </ResponsiveContainer>
-                    {/* Center Text */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        <span className="text-xs text-gray-500 font-bold uppercase">Total</span>
-                        <span className="text-xl font-bold text-white tabular-nums">{totalExpenses.toLocaleString()}</span>
-                    </div>
-                </div>
-
-                {/* Categories List */}
-                <div className="flex-1 w-full space-y-4">
-                    {pieData.slice(0, 4).map((cat, idx) => (
-                        <div key={idx} className="group">
-                            <div className="flex justify-between items-center mb-1">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
-                                    <span className="text-sm font-medium text-gray-200">{cat.name}</span>
-                                </div>
-                                <span className="text-sm font-bold text-white">{cat.value.toLocaleString()}</span>
-                            </div>
-                            <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
-                                <div 
-                                    className="h-full rounded-full transition-all duration-1000 ease-out"
-                                    style={{ width: `${(cat.value / totalExpenses) * 100}%`, backgroundColor: cat.color }}
-                                />
-                            </div>
+                {/* Top Category */}
+                {topCategory && (
+                    <GlassCard className="relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
+                            <Layers size={48} />
                         </div>
-                    ))}
-                    {pieData.length > 4 && (
-                        <button className="w-full text-xs text-gray-500 py-2 hover:text-white transition-colors flex items-center justify-center gap-1">
-                            View All Categories <ArrowRight size={12} />
-                        </button>
-                    )}
-                </div>
+                        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Top Category</p>
+                        <h3 className="text-lg font-bold text-white truncate pr-4 leading-tight">
+                            {topCategory.name}
+                        </h3>
+                        <p className="text-xs text-zinc-500 mt-1 font-mono">
+                            {((topCategory.value / totalExpenses) * 100).toFixed(0)}% of total
+                        </p>
+                        <div className="absolute bottom-0 left-0 h-1 bg-current opacity-50" style={{ width: `${(topCategory.value / totalExpenses) * 100}%`, color: topCategory.color }}></div>
+                    </GlassCard>
+                )}
             </div>
-        ) : (
-            <div className="py-10 text-center text-gray-500">No data to display.</div>
-        )}
-      </div>
 
-      {/* 3. Weekly Trend (Bar Chart) */}
-      <div className="bg-[#1C1C1E] p-6 rounded-[2rem] border border-white/5">
-         <h3 className="font-bold text-white mb-6 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-blue-400" /> Weekly Activity
-         </h3>
-         
-         <div className="h-[200px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={barData} barSize={12}>
-                    <defs>
-                        <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#3b82f6" stopOpacity={1}/>
-                            <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                        </linearGradient>
-                    </defs>
-                    <CartesianGrid vertical={false} stroke="#333" strokeDasharray="3 3" opacity={0.3} />
-                    <XAxis 
-                        dataKey="name" 
-                        stroke="#52525b" 
-                        tick={{fill: '#71717a', fontSize: 10}} 
-                        axisLine={false} 
-                        tickLine={false} 
-                        dy={10}
-                    />
-                    <Tooltip 
-                        cursor={{fill: '#ffffff', opacity: 0.05, radius: 4}}
-                        contentStyle={{ backgroundColor: '#000', border: '1px solid #333', borderRadius: '8px', color: '#fff' }}
-                    />
-                    <Bar 
-                        dataKey="amount" 
-                        fill="url(#barGradient)" 
-                        radius={[10, 10, 10, 10]} 
-                    />
-                </BarChart>
-            </ResponsiveContainer>
-         </div>
-      </div>
+            {/* 2. Weekly Activity (Neon Bar Chart) */}
+            <GlassCard>
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="font-bold text-white flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5 text-blue-400" /> Weekly Flow
+                    </h3>
+                </div>
+                
+                <div className="h-[220px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={barData} barSize={16}>
+                            <defs>
+                                <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={1}/>
+                                    <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.2}/>
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid vertical={false} stroke="#ffffff" strokeOpacity={0.05} strokeDasharray="3 3" />
+                            <XAxis 
+                                dataKey="name" 
+                                stroke="#52525b" 
+                                tick={{fill: '#71717a', fontSize: 10, fontWeight: 600}} 
+                                axisLine={false} 
+                                tickLine={false} 
+                                dy={10}
+                            />
+                            <Tooltip content={<CustomTooltip />} cursor={{fill: '#ffffff', opacity: 0.05, radius: 8}} />
+                            <Bar 
+                                dataKey="amount" 
+                                fill="url(#barGradient)" 
+                                radius={[8, 8, 8, 8]} 
+                            />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+            </GlassCard>
 
+            {/* 3. Spending Breakdown (Donut & List) */}
+            <GlassCard>
+                <h3 className="font-bold text-white mb-6 flex items-center gap-2">
+                    <DollarSign className="w-5 h-5 text-sber-green" /> Breakdown
+                </h3>
+                
+                <div className="flex flex-col items-center gap-8">
+                    {/* Donut Chart */}
+                    <div className="h-[220px] w-[220px] relative">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={pieData}
+                                    innerRadius={70}
+                                    outerRadius={100}
+                                    paddingAngle={4}
+                                    dataKey="value"
+                                    cornerRadius={6}
+                                    stroke="none"
+                                >
+                                    {pieData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} style={{ filter: `drop-shadow(0 0 5px ${entry.color}40)` }} />
+                                    ))}
+                                </Pie>
+                                <Tooltip content={<CustomTooltip />} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                        {/* Center Text */}
+                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Total</span>
+                            <span className="text-xl font-bold text-white tabular-nums">{totalExpenses.toLocaleString()}</span>
+                        </div>
+                    </div>
+
+                    {/* Categories List */}
+                    <div className="w-full space-y-4">
+                        {pieData.slice(0, 5).map((cat, idx) => (
+                            <div key={idx} className="group">
+                                <div className="flex justify-between items-center mb-1.5">
+                                    <div className="flex items-center gap-3">
+                                        <div 
+                                            className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg" 
+                                            style={{ backgroundColor: `${cat.color}20`, color: cat.color }}
+                                        >
+                                            {/* We could render the icon component here if passed, simplistic colored box for now */}
+                                            <div className="w-2 h-2 rounded-full bg-current shadow-[0_0_8px_currentColor]"></div>
+                                        </div>
+                                        <span className="text-sm font-bold text-gray-200">{cat.name}</span>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-sm font-bold text-white block">{cat.value.toLocaleString()}</span>
+                                        <span className="text-[10px] text-zinc-500 font-mono">{((cat.value / totalExpenses) * 100).toFixed(0)}%</span>
+                                    </div>
+                                </div>
+                                <div className="w-full bg-zinc-900 h-1.5 rounded-full overflow-hidden">
+                                    <div 
+                                        className="h-full rounded-full transition-all duration-1000 ease-out relative"
+                                        style={{ width: `${(cat.value / totalExpenses) * 100}%`, backgroundColor: cat.color }}
+                                    >
+                                        <div className="absolute right-0 top-0 bottom-0 w-2 bg-white/50 blur-[1px]"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </GlassCard>
+          </>
+      ) : (
+          <div className="flex flex-col items-center justify-center py-20 text-center opacity-50">
+             <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mb-6 border border-white/5 border-dashed">
+                <PieIcon size={40} strokeWidth={1} />
+             </div>
+             <p className="text-lg font-bold text-white">No data yet</p>
+             <p className="text-sm text-zinc-500">Add transactions to see reports.</p>
+          </div>
+      )}
     </div>
   );
 };
