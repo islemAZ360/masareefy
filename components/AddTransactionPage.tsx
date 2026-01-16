@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, Camera, Image as ImageIcon, Calendar, Tag, Delete, Check, Wand2, Wallet, PiggyBank, X, Sparkles, Receipt, PenLine } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { ChevronLeft, Camera, Calendar, Delete, Check, Wand2, Wallet, PiggyBank, X, PenLine } from 'lucide-react';
 import { UserSettings, Transaction, TransactionType, WalletType } from '../types';
 import { CATEGORIES, TRANSLATIONS } from '../constants';
 import { analyzeReceipt, parseMagicInput } from '../services/geminiService';
@@ -51,7 +51,7 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
     else setAmountStr(prev => prev.slice(0, -1));
   };
 
-  // --- AI: Scan Receipt ---
+  // --- AI: Scan Receipt (With Death Calculation) ---
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (user.isGuest || !user.apiKey) { alert(t.guest_warning); return; }
     const file = e.target.files?.[0];
@@ -60,13 +60,55 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
     setLoadingMsg(t.analyzing);
     try {
       const result = await analyzeReceipt(file, user.apiKey, user.language);
+      
+      // Update UI
       setAmountStr(result.amount.toString());
       setDate(result.date);
       setVendor(result.vendor);
       setType(result.type as TransactionType);
       if (CATEGORIES.some(c => c.id === result.category)) setSelectedCategory(result.category);
-    } catch (err) { alert("Failed to analyze receipt."); } 
-    finally { setLoadingMsg(null); }
+
+      // --- THE DEATH CALCULATION LOGIC ---
+      if (result.type === 'expense' && user.dailyLimit && user.dailyLimit > 0) {
+          const todayStr = new Date().toISOString().split('T')[0];
+          // Calculate what has been spent today so far
+          const spentToday = transactions
+              .filter(tx => tx.type === 'expense' && tx.wallet === 'spending' && tx.date.startsWith(todayStr))
+              .reduce((sum, tx) => sum + tx.amount, 0);
+          
+          const newTotal = spentToday + result.amount;
+          
+          if (newTotal > user.dailyLimit) {
+              // Danger Mode
+              // If you keep spending 'newTotal' every day, how long until 'currentBalance' is 0?
+              const currentMoney = user.currentBalance || 0;
+              const burnRate = newTotal; // Assuming this day represents typical burn if reckless
+              const daysToDeath = burnRate > 0 ? (currentMoney / burnRate) : 0;
+              
+              const msg = user.language === 'ar'
+                ? `⚠️ خطر! لقد تجاوزت حدك اليومي.\nإذا استمريت بهذا المعدل (${newTotal} يومياً)، سينفد مالك بالكامل خلال ${daysToDeath.toFixed(0)} يوم. 💀`
+                : `⚠️ DANGER! You exceeded your daily limit.\nIf you continue spending ${newTotal} daily, you will go BROKE in ${daysToDeath.toFixed(0)} days. 💀`;
+              
+              alert(msg);
+          } else {
+              // Safe Mode
+              const saved = user.dailyLimit - newTotal;
+              const msg = user.language === 'ar'
+                ? `✅ ممتاز! أنت في الأمان.\nلقد وفرت ${saved.toLocaleString()} من ميزانية اليوم.`
+                : `✅ Great job! You are safe.\nYou saved ${saved.toLocaleString()} from today's budget.`;
+              
+              alert(msg);
+          }
+      }
+      // -----------------------------------
+
+    } catch (err) { 
+        alert("Failed to analyze receipt. Please try again."); 
+    } finally { 
+        setLoadingMsg(null); 
+        // Reset input so same file can be selected again if needed
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   // --- AI: Magic Input ---
@@ -338,7 +380,7 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
                     <NumpadButton onClick={() => handleNumPress('.')}>.</NumpadButton>
                     <NumpadButton onClick={() => handleNumPress('0')}>0</NumpadButton>
                     <div className="flex items-center justify-center">
-                        <span className="text-xs text-zinc-600 font-mono">v2.0</span>
+                        <span className="text-xs text-zinc-600 font-mono">v2.1</span>
                     </div>
                 </div>
             </div>

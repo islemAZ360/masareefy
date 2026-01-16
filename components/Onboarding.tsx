@@ -3,7 +3,7 @@ import { UserSettings, Currency, Language, RecurringBill } from '../types';
 import { TRANSLATIONS, RUSSIAN_BANKS } from '../constants';
 import { validateApiKey, analyzeOnboardingData, OnboardingAnalysisResult } from '../services/geminiService';
 import { signInWithGoogle, auth, getUserData } from '../services/firebase';
-import { Wallet, Check, ImageIcon, DollarSign, Upload, Zap, ArrowRight, Plus, UserCircle2, Key, CheckCircle2, Loader2, Building2, PiggyBank, CalendarClock, ChevronDown, Sparkles } from 'lucide-react';
+import { Wallet, Check, ImageIcon, DollarSign, Upload, Zap, ArrowRight, Plus, UserCircle2, Key, CheckCircle2, Loader2, PiggyBank, CalendarClock, ChevronDown, Sparkles } from 'lucide-react';
 
 interface BankDetails {
     name: string;
@@ -367,7 +367,8 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
   }
 
   return (
-    <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-6 text-center text-white relative overflow-hidden font-sans">
+    // CHANGE: Increased padding top (pt-24) to avoid overlap with dots
+    <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center px-6 pt-24 pb-6 text-center text-white relative overflow-hidden font-sans">
         <AuroraBackground />
         
         {/* Step Indicator (Floating) */}

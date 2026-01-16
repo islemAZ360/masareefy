@@ -175,7 +175,6 @@ const App = () => {
     alert(`Active Plan: ${plan.type.toUpperCase()}`);
   };
 
-  // --- NEW: Update Bank Name Handler ---
   const handleUpdateBankName = (wallet: WalletType, newName: string) => {
       setUser(prev => ({
           ...prev,
@@ -302,7 +301,8 @@ const App = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white relative overflow-hidden font-sans selection:bg-sber-green/30 pb-32">
+    // Updated padding-bottom to pb-40 to prevent bottom nav from covering content
+    <div className="min-h-screen bg-[#050505] text-white relative overflow-hidden font-sans selection:bg-sber-green/30 pb-40">
       <div className="fixed inset-0 z-0 pointer-events-none bg-[#050505]">
           <div className="absolute top-[-20%] left-[-20%] w-[80vw] h-[80vw] bg-sber-green/5 rounded-full blur-[150px] opacity-30 animate-pulse-slow"></div>
           <div className="absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-emerald-900/10 rounded-full blur-[120px] opacity-20"></div>
@@ -349,7 +349,7 @@ const App = () => {
               onPayBill={handlePayBill}
               onAddBill={handleAddBill}
               onDeleteBill={handleDeleteBill}
-              onUpdateBankName={handleUpdateBankName} // Pass the handler
+              onUpdateBankName={handleUpdateBankName}
             />
           )}
 
