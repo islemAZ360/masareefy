@@ -23,18 +23,18 @@ export const Navigation: React.FC<Props> = ({ currentView, onNavigate }) => {
   };
 
   return (
-    <div className="fixed bottom-8 left-0 right-0 z-50 flex justify-center pointer-events-none">
-       <nav className="bg-[#161618]/90 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] px-8 py-4 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.8)] flex items-center gap-8 pointer-events-auto transition-transform duration-300">
+    <div className="fixed bottom-6 left-0 right-0 z-50 flex justify-center pointer-events-none px-4">
+       <nav className="bg-[#0A0A0A]/95 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] px-6 py-3 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.9)] flex items-center justify-between w-full max-w-sm pointer-events-auto transition-transform duration-300">
           
           <NavItem view="dashboard" icon={Home} />
           <NavItem view="transactions" icon={List} />
 
-          {/* Central Add Button */}
+          {/* Central Add Button (Restored to Center) */}
           <button 
               onClick={() => onNavigate('add')}
-              className="w-16 h-16 bg-white text-black rounded-[1.2rem] flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95 transition-all duration-300 -mt-10 border-4 border-[#050505] relative z-20 group"
+              className="w-14 h-14 bg-white text-black rounded-[1.2rem] flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95 transition-all duration-300 -mt-8 border-4 border-[#050505] relative z-20 group shrink-0"
           >
-              <Plus size={32} strokeWidth={3} className="group-hover:rotate-90 transition-transform duration-300" />
+              <Plus size={28} strokeWidth={3} className="group-hover:rotate-90 transition-transform duration-300" />
           </button>
 
           <NavItem view="reports" icon={PieIcon} />

@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, reauthenticateWithPopup } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { UserSettings, Transaction } from "../types";
 
@@ -32,6 +32,19 @@ export const signInWithGoogle = async () => {
     return result.user;
   } catch (error) {
     console.error("Error signing in with Google", error);
+    throw error;
+  }
+};
+
+export const reauthenticateUser = async () => {
+  try {
+    if (auth.currentUser) {
+      await reauthenticateWithPopup(auth.currentUser, googleProvider);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error("Re-authentication failed", error);
     throw error;
   }
 };

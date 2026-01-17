@@ -69,9 +69,9 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
   const isOverBudget = dailyLimit > 0 && todaySpent > dailyLimit;
   const progressPercent = dailyLimit > 0 ? Math.min((todaySpent / dailyLimit) * 100, 100) : 0;
   
-  let gaugeColor = 'bg-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.5)]'; // Safe
-  if (progressPercent > 75) gaugeColor = 'bg-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)]'; // Warning
-  if (progressPercent >= 100) gaugeColor = 'bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.6)]'; // Danger
+  let gaugeColor = 'bg-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.6)]'; // Safe Neon
+  if (progressPercent > 75) gaugeColor = 'bg-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.6)]'; // Warning Neon
+  if (progressPercent >= 100) gaugeColor = 'bg-red-500 shadow-[0_0_25px_rgba(239,68,68,0.8)]'; // Danger Neon
 
   // --- Logic: Salary Countdown ---
   const calculateDaysToSalary = () => {
@@ -102,15 +102,6 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
       return { dailyBurn, daysToZero };
   };
   const burnStats = calculateBurnRate();
-
-  const detectedSub = (() => {
-      const counts: Record<number, number> = {};
-      transactions.filter(t => t.type === 'expense').forEach(t => {
-          counts[t.amount] = (counts[t.amount] || 0) + 1;
-      });
-      const subAmount = Object.keys(counts).find(k => counts[Number(k)] > 1 && Number(k) > 0);
-      return subAmount ? Number(subAmount) : null;
-  })();
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
@@ -150,27 +141,30 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
   }) => (
       <div 
         onClick={onClick}
-        className={`absolute inset-0 rounded-[2rem] p-6 flex flex-col justify-between cursor-pointer overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+        className={`absolute inset-0 rounded-[2rem] p-6 flex flex-col justify-between cursor-pointer overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] border border-white/5 ${
             isActive 
             ? 'z-20 opacity-100 translate-y-0 scale-100 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)]' 
-            : 'z-10 opacity-60 translate-y-6 scale-95 hover:translate-y-4 brightness-50 grayscale-[0.5]'
+            : 'z-10 opacity-40 translate-y-8 scale-90 hover:translate-y-6 brightness-50 grayscale-[0.8] hover:grayscale-[0.5]'
         }`}
         style={{ 
             backgroundColor: bgColor, 
             color: textColor,
-            boxShadow: isActive ? `0 25px 50px -12px ${bgColor}40` : 'none'
+            boxShadow: isActive ? `0 25px 60px -15px ${bgColor}50` : 'none'
         }}
       >
          <NoiseTexture />
          
+         {/* Holographic Shine */}
+         <div className={`absolute inset-0 bg-gradient-to-tr from-white/0 via-white/10 to-white/0 skew-x-12 opacity-0 group-hover:opacity-100 animate-shimmer transition-opacity pointer-events-none ${isActive ? 'block' : 'hidden'}`} style={{backgroundSize: '200% 100%'}}></div>
+         
          {/* Glossy Reflection */}
-         <div className="absolute -top-20 -right-20 w-64 h-64 bg-white opacity-10 rounded-full blur-3xl pointer-events-none"></div>
+         <div className="absolute -top-32 -right-32 w-80 h-80 bg-white opacity-5 rounded-full blur-[80px] pointer-events-none"></div>
          
          <div className="relative z-10 flex justify-between items-start">
              <div className="flex flex-col gap-4">
                  <div className="flex items-center gap-2 opacity-80">
                     <span className="text-[10px] font-bold uppercase tracking-[0.2em]">{type === 'spending' ? 'DEBIT' : 'SAVINGS'}</span>
-                    <div className="w-1 h-1 rounded-full bg-current"></div>
+                    <div className="w-1 h-1 rounded-full bg-current animate-pulse"></div>
                     <span className="text-[10px] font-bold uppercase tracking-wider">WORLD</span>
                  </div>
                  <EMVChip />
@@ -181,10 +175,10 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
          <div className="relative z-10 mt-auto">
              <div className="flex justify-between items-end">
                  <div>
-                    <h2 className="text-3xl font-mono font-bold tracking-tighter tabular-nums mb-1 drop-shadow-md">
+                    <h2 className="text-4xl font-mono font-bold tracking-tighter tabular-nums mb-1 drop-shadow-lg">
                         {balance.toLocaleString()} <span className="text-base opacity-70">{user.currency}</span>
                     </h2>
-                    <p className="font-mono text-xs tracking-[0.15em] opacity-60">
+                    <p className="font-mono text-xs tracking-[0.2em] opacity-60">
                         •••• •••• •••• {user.apiKey ? user.apiKey.slice(-4) : '8888'}
                     </p>
                  </div>
@@ -202,28 +196,16 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
   );
 
   return (
-    <div className="space-y-6 pb-32 relative">
+    <div className="space-y-8 pb-32 relative">
       
-      {/* Header */}
-      <div className="flex justify-between items-center px-2 pt-4">
-        <div>
-           <p className="text-zinc-400 text-xs font-medium uppercase tracking-wider mb-0.5">{greeting}</p>
-           <h1 className="text-3xl font-bold text-white tracking-tight">{user.name.split(' ')[0]}</h1>
-        </div>
-        <button onClick={() => onChangeView('settings')} className="relative group">
-           <div className="absolute inset-0 bg-sber-green rounded-full blur-lg opacity-20 group-hover:opacity-40 transition-opacity"></div>
-           {user.photoURL ? (
-             <img src={user.photoURL} className="relative w-12 h-12 rounded-full border-2 border-white/10 object-cover" alt="profile" />
-           ) : (
-             <div className="relative w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center border-2 border-zinc-700">
-                <span className="text-lg font-bold text-white">{user.name.charAt(0)}</span>
-             </div>
-           )}
-        </button>
+      {/* Greeting - Slide Down */}
+      <div className="px-2 pt-2 animate-slide-down">
+        <p className="text-zinc-400 text-xs font-medium uppercase tracking-wider mb-0.5">{greeting}</p>
+        <h1 className="text-3xl font-bold text-white tracking-tight">{user.name.split(' ')[0]}</h1>
       </div>
 
       {/* 1. Stacked Cards Area */}
-      <div className="relative h-[240px] w-full perspective-1000 group">
+      <div className="relative h-[240px] w-full perspective-1000 group animate-slide-up" style={{ animationDelay: '0.1s' }}>
           {/* Savings Card */}
           <PremiumCard 
             type="savings" 
@@ -250,23 +232,24 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
       </div>
 
       {/* 2. Neon Daily Gauge */}
-      <div className="px-1">
+      <div className="px-1 animate-slide-up" style={{ animationDelay: '0.2s' }}>
         {dailyLimit > 0 ? (
-            <div className="bg-[#121214]/80 backdrop-blur-xl p-5 rounded-[2rem] border border-white/5 relative overflow-hidden group">
-                <div className={`absolute top-0 left-0 w-1 h-full ${gaugeColor.split(' ')[0]}`}></div>
+            <div className="glass-panel p-5 rounded-[2rem] relative overflow-hidden group">
+                {/* Side Glow Line */}
+                <div className={`absolute top-0 left-0 w-1 h-full ${gaugeColor.split(' ')[0]} shadow-[0_0_15px_currentColor]`}></div>
                 
-                <div className="flex justify-between items-end mb-3 relative z-10">
+                <div className="flex justify-between items-end mb-4 relative z-10">
                     <div>
-                        <div className="flex items-center gap-2 mb-1">
-                            <Target size={14} className={isOverBudget ? 'text-red-500' : 'text-emerald-400'} />
+                        <div className="flex items-center gap-2 mb-1.5">
+                            <Target size={14} className={isOverBudget ? 'text-red-500 animate-pulse' : 'text-emerald-400'} />
                             <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{user.language === 'ar' ? 'ميزانية اليوم' : 'Daily Limit'}</span>
                         </div>
-                        <h3 className="text-3xl font-bold text-white tabular-nums tracking-tight">
+                        <h3 className="text-3xl font-bold text-white tabular-nums tracking-tight drop-shadow-md">
                             {todaySpent.toLocaleString()} <span className="text-sm text-zinc-600 font-medium">/ {dailyLimit}</span>
                         </h3>
                     </div>
                     <div className="text-right">
-                         <div className={`text-[10px] font-bold px-3 py-1.5 rounded-full backdrop-blur-md border border-white/5 ${isOverBudget ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                         <div className={`text-[10px] font-bold px-3 py-1.5 rounded-full backdrop-blur-md border border-white/5 shadow-lg ${isOverBudget ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'}`}>
                             {isOverBudget 
                                 ? (user.language === 'ar' ? 'تجاوزت الحد' : 'OVER LIMIT') 
                                 : `${Math.round((todaySpent/dailyLimit)*100)}% USED`
@@ -276,12 +259,12 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
                 </div>
 
                 {/* Neon Progress Bar */}
-                <div className="h-3 bg-zinc-900 rounded-full overflow-hidden relative z-10 shadow-inner border border-white/5">
+                <div className="h-3 bg-black/50 rounded-full overflow-hidden relative z-10 shadow-inner border border-white/5">
                     <div 
                         className={`h-full rounded-full transition-all duration-1000 ease-out relative ${gaugeColor} ${isOverBudget ? 'animate-pulse' : ''}`}
                         style={{ width: `${progressPercent}%` }}
                     >
-                        <div className="absolute right-0 top-0 bottom-0 w-2 bg-white/50 blur-[2px]"></div>
+                        <div className="absolute right-0 top-0 bottom-0 w-4 bg-white/60 blur-[4px]"></div>
                     </div>
                 </div>
                 
@@ -291,29 +274,29 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
         ) : (
             <button 
                 onClick={() => onChangeView('settings')}
-                className="w-full bg-[#1C1C1E] p-5 rounded-[2rem] border border-dashed border-zinc-800 flex items-center justify-center gap-2 text-zinc-500 hover:text-white hover:border-zinc-600 transition-all hover:bg-white/5"
+                className="w-full glass p-6 rounded-[2rem] border border-dashed border-zinc-700 flex items-center justify-center gap-3 text-zinc-500 hover:text-white hover:border-zinc-500 transition-all hover:bg-white/5 active:scale-95"
             >
-                <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
-                    <Target size={16} />
+                <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
+                    <Target size={18} />
                 </div>
-                <span className="text-xs font-bold">{user.language === 'ar' ? 'تحديد خطة صرف يومية' : 'Setup Budget Plan'}</span>
+                <span className="text-xs font-bold uppercase tracking-wider">{user.language === 'ar' ? 'تحديد خطة صرف يومية' : 'Setup Budget Plan'}</span>
             </button>
         )}
       </div>
 
       {/* 3. Salary Countdown Pill */}
       {salaryData && salaryData.days > 0 && (
-          <div className="px-1">
-              <div className="bg-gradient-to-r from-[#1C1C1E] to-[#121214] rounded-[1.5rem] p-1 border border-white/5 flex items-center relative overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 to-transparent"></div>
+          <div className="px-1 animate-slide-up" style={{ animationDelay: '0.3s' }}>
+              <div className="glass p-1.5 rounded-[1.8rem] border border-white/5 flex items-center relative overflow-hidden group">
+                  <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                   
-                  <div className="bg-[#2C2C2E] p-3 rounded-[1.2rem] text-purple-400 z-10 m-1">
+                  <div className="bg-[#18181b] p-3.5 rounded-[1.4rem] text-purple-400 z-10 shadow-lg border border-white/5">
                       <CalendarClock size={20} />
                   </div>
-                  <div className="flex-1 px-3 z-10 flex justify-between items-center">
+                  <div className="flex-1 px-4 z-10 flex justify-between items-center">
                       <div>
                           <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Payday in</p>
-                          <p className="text-lg font-bold text-white leading-none">{salaryData.days} Days</p>
+                          <p className="text-xl font-bold text-white leading-none tracking-tight">{salaryData.days} Days</p>
                       </div>
                       
                       {/* Circular Progress Mini */}
@@ -326,6 +309,7 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
                                 strokeDasharray="100" 
                                 strokeDashoffset={100 - ((salaryData.totalInterval - salaryData.days) / salaryData.totalInterval) * 100} 
                                 strokeLinecap="round"
+                                className="drop-shadow-[0_0_4px_rgba(168,85,247,0.5)]"
                               />
                           </svg>
                       </div>
@@ -336,16 +320,16 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
 
       {/* 4. Alerts & Insights */}
       {burnStats && burnStats.daysToZero < 10 && salaryData && salaryData.days > burnStats.daysToZero && (
-          <div className="px-1 animate-pulse">
-              <div className={`rounded-[1.5rem] p-4 border flex items-start gap-4 shadow-lg ${user.selectedPlan === 'austerity' ? 'bg-red-950/30 border-red-500/30' : 'bg-yellow-950/30 border-yellow-500/30'}`}>
-                  <div className={`p-3 rounded-full shrink-0 ${user.selectedPlan === 'austerity' ? 'bg-red-500/20 text-red-500' : 'bg-yellow-500/20 text-yellow-500'}`}>
+          <div className="px-1 animate-slide-up" style={{ animationDelay: '0.35s' }}>
+              <div className={`rounded-[2rem] p-5 border flex items-start gap-4 shadow-lg backdrop-blur-md ${user.selectedPlan === 'austerity' ? 'bg-red-950/40 border-red-500/30' : 'bg-yellow-950/40 border-yellow-500/30'}`}>
+                  <div className={`p-3 rounded-2xl shrink-0 ${user.selectedPlan === 'austerity' ? 'bg-red-500/20 text-red-500' : 'bg-yellow-500/20 text-yellow-500'}`}>
                     {user.selectedPlan === 'austerity' ? <Skull size={20} /> : <AlertTriangle size={20} />}
                   </div>
                   <div>
                       <h4 className={`font-bold text-sm ${user.selectedPlan === 'austerity' ? 'text-red-400' : 'text-yellow-400'}`}>
                           {user.selectedPlan === 'austerity' ? "Critical Condition" : "Funds Low"}
                       </h4>
-                      <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                      <p className="text-xs text-zinc-300 mt-1 leading-relaxed">
                           {user.selectedPlan === 'austerity' 
                             ? `Estimated runway: ${burnStats.daysToZero.toFixed(0)} days. Salary in ${salaryData.days} days.`
                             : `Runway: ${burnStats.daysToZero.toFixed(0)} days. Switch to Austerity recommended.`
@@ -357,57 +341,59 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
       )}
 
       {/* 5. Glassy Action Grid */}
-      <div className="grid grid-cols-2 gap-3 px-1">
+      <div className="grid grid-cols-2 gap-3 px-1 animate-slide-up" style={{ animationDelay: '0.4s' }}>
           <button 
              onClick={() => onChangeView('add')}
-             className="group bg-[#1C1C1E] hover:bg-[#252527] p-5 rounded-[2rem] border border-white/5 flex flex-col items-center gap-3 transition-all active:scale-95 relative overflow-hidden"
+             className="group glass p-5 rounded-[2rem] flex flex-col items-center gap-3 transition-all active:scale-95 hover:bg-white/5 border border-white/5 hover:border-white/10 relative overflow-hidden"
           >
              <div className="absolute inset-0 bg-gradient-to-tr from-sber-green/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-             <div className="w-12 h-12 bg-sber-green/10 rounded-2xl flex items-center justify-center text-sber-green group-hover:scale-110 transition-transform duration-300">
+             <div className="w-12 h-12 bg-sber-green/10 rounded-2xl flex items-center justify-center text-sber-green group-hover:scale-110 transition-transform duration-300 border border-sber-green/20 group-hover:shadow-[0_0_20px_rgba(33,160,56,0.3)]">
                  <ArrowUpRight size={24} />
              </div>
-             <span className="text-xs font-bold text-zinc-300 group-hover:text-white uppercase tracking-widest">{t.add}</span>
+             <span className="text-xs font-bold text-zinc-400 group-hover:text-white uppercase tracking-widest transition-colors">{t.add}</span>
           </button>
           
           <button 
              onClick={() => onChangeView('transactions')}
-             className="group bg-[#1C1C1E] hover:bg-[#252527] p-5 rounded-[2rem] border border-white/5 flex flex-col items-center gap-3 transition-all active:scale-95 relative overflow-hidden"
+             className="group glass p-5 rounded-[2rem] flex flex-col items-center gap-3 transition-all active:scale-95 hover:bg-white/5 border border-white/5 hover:border-white/10 relative overflow-hidden"
           >
              <div className="absolute inset-0 bg-gradient-to-tl from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-             <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform duration-300">
+             <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform duration-300 border border-blue-500/20 group-hover:shadow-[0_0_20px_rgba(59,130,246,0.3)]">
                  <TrendingUp size={24} />
              </div>
-             <span className="text-xs font-bold text-zinc-300 group-hover:text-white uppercase tracking-widest">History</span>
+             <span className="text-xs font-bold text-zinc-400 group-hover:text-white uppercase tracking-widest transition-colors">History</span>
           </button>
       </div>
 
       {/* AI Advisor Banner */}
-      <button 
-        onClick={onOpenAI}
-        className="mx-1 relative group overflow-hidden rounded-[2rem] p-1 pr-6 flex items-center justify-between transition-all"
-      >
-         <div className="absolute inset-0 bg-gradient-to-r from-indigo-900/40 to-purple-900/40 border border-white/5 rounded-[2rem]"></div>
-         <div className="absolute inset-0 opacity-20 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] mix-blend-overlay"></div>
-         
-         <div className="flex items-center gap-4 relative z-10">
-            <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[1.7rem] flex items-center justify-center shadow-lg shadow-purple-500/30 group-hover:rotate-3 transition-transform">
-                <Sparkles className="text-white w-7 h-7 fill-current animate-pulse" />
+      <div className="px-1 animate-slide-up" style={{ animationDelay: '0.5s' }}>
+        <button 
+            onClick={onOpenAI}
+            className="w-full relative group overflow-hidden rounded-[2.5rem] p-1 pr-6 flex items-center justify-between transition-all border border-indigo-500/30 hover:border-indigo-500/50"
+        >
+            <div className="absolute inset-0 bg-gradient-to-r from-indigo-900/60 to-purple-900/60 rounded-[2.5rem]"></div>
+            <div className="absolute inset-0 opacity-20 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] mix-blend-overlay"></div>
+            
+            <div className="flex items-center gap-4 relative z-10">
+                <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[2rem] flex items-center justify-center shadow-[0_0_20px_rgba(129,140,248,0.4)] group-hover:scale-105 transition-transform duration-500">
+                    <Sparkles className="text-white w-7 h-7 fill-current animate-pulse" />
+                </div>
+                <div className="text-left">
+                    <h3 className="font-bold text-white text-lg drop-shadow-md">AI Advisor</h3>
+                    <p className="text-xs text-indigo-200 font-medium">Generate insights report</p>
+                </div>
             </div>
-            <div className="text-left">
-                <h3 className="font-bold text-white text-lg">AI Advisor</h3>
-                <p className="text-xs text-indigo-200">Generate insights report</p>
+            <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center relative z-10 group-hover:bg-white/20 transition-colors backdrop-blur-sm border border-white/10">
+                <ChevronRight className="text-white w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
             </div>
-         </div>
-         <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center relative z-10 group-hover:bg-white/20 transition-colors">
-            <ChevronRight className="text-white w-4 h-4" />
-         </div>
-      </button>
+        </button>
+      </div>
 
       {/* Recurring Bills */}
-      <div className="pt-2 px-1">
+      <div className="pt-2 px-1 animate-slide-up" style={{ animationDelay: '0.6s' }}>
          <div className="flex items-center gap-2 mb-4 px-2">
-             <div className="w-1 h-4 bg-zinc-700 rounded-full"></div>
-             <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">{t.fixed_bills}</h3>
+             <div className="w-1 h-4 bg-zinc-600 rounded-full"></div>
+             <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">{t.fixed_bills}</h3>
          </div>
          <RecurringBills user={user} onPayBill={onPayBill} onAddBill={onAddBill} onDeleteBill={onDeleteBill} />
       </div>
@@ -415,19 +401,19 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
       {/* Rename Modal */}
       {renamingWallet && (
          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setRenamingWallet(null)} />
-            <div className="relative bg-[#1C1C1E] border border-white/10 w-full max-w-xs rounded-3xl p-6 animate-in zoom-in-95 shadow-2xl">
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setRenamingWallet(null)} />
+            <div className="relative glass-strong border border-white/10 w-full max-w-xs rounded-[2rem] p-6 animate-scale-in shadow-2xl">
                 <h3 className="text-base font-bold text-white mb-4 text-center">Rename Wallet</h3>
                 <input 
                     type="text" 
                     value={tempName}
                     onChange={(e) => setTempName(e.target.value)}
-                    className="w-full bg-black/50 p-4 rounded-2xl border border-zinc-700 text-white text-center font-bold focus:border-sber-green outline-none mb-4"
+                    className="w-full bg-black/50 p-4 rounded-2xl border border-zinc-700 text-white text-center font-bold focus:border-sber-green focus:shadow-[0_0_15px_rgba(33,160,56,0.3)] outline-none mb-4 transition-all"
                     autoFocus
                 />
                 <div className="flex gap-3">
-                    <button onClick={() => setRenamingWallet(null)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 py-3 rounded-xl text-xs font-bold text-zinc-400">Cancel</button>
-                    <button onClick={handleSaveRename} className="flex-1 bg-sber-green hover:bg-emerald-600 py-3 rounded-xl text-xs font-bold text-white shadow-lg shadow-emerald-900/20">Save</button>
+                    <button onClick={() => setRenamingWallet(null)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 py-3 rounded-xl text-xs font-bold text-zinc-400 transition-colors">Cancel</button>
+                    <button onClick={handleSaveRename} className="flex-1 bg-sber-green hover:bg-emerald-600 py-3 rounded-xl text-xs font-bold text-white shadow-lg shadow-emerald-900/20 transition-all active:scale-95">Save</button>
                 </div>
             </div>
          </div>

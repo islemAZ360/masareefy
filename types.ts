@@ -82,4 +82,41 @@ export interface ExpenseCategory {
   color: string;
 }
 
-export type ViewState = 'dashboard' | 'transactions' | 'add' | 'reports' | 'settings' | 'onboarding' | 'ai-advisor';
+// --- Titan Simulator Types ---
+
+export interface TimelinePoint {
+  date: string;
+  balance: number;
+  event?: string; // e.g., "Salary", "Rent", "Collapse"
+}
+
+export interface TitanScenario {
+  id: 'collapse' | 'warrior' | 'wealth';
+  name: string;
+  description: string;
+  color: string;
+  timeline: TimelinePoint[];
+  finalBalance: number;
+}
+
+export interface RiskAlert {
+  billName: string;
+  date: string;
+  severity: 'high' | 'critical';
+  message: string;
+}
+
+export interface LifeEnergy {
+  hoursOfWork: number;
+  daysOfLife: number; // e.g. 0.5 days
+  sacrifice: string; // e.g. "30 cups of coffee"
+}
+
+export interface TitanAnalysis {
+  scenarios: TitanScenario[];
+  risks: RiskAlert[];
+  lifeEnergy: LifeEnergy;
+  aiVerdict: string; // The final advice
+}
+
+export type ViewState = 'dashboard' | 'transactions' | 'add' | 'reports' | 'settings' | 'onboarding' | 'ai-advisor' | 'simulator';

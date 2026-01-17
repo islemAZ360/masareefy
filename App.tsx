@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Globe } from 'lucide-react';
+import { Globe, BrainCircuit } from 'lucide-react';
 import { UserSettings, Transaction, ViewState, TransactionType, BudgetPlan, RecurringBill, WalletType } from './types';
 import { TRANSLATIONS } from './constants';
 import { OnboardingAnalysisResult } from './services/geminiService';
@@ -14,6 +14,7 @@ import { TransactionsPage } from './components/TransactionsPage';
 import { AddTransactionPage } from './components/AddTransactionPage';
 import { SettingsPage } from './components/SettingsPage';
 import { Navigation } from './components/Navigation';
+import { TitanSimulator } from './components/TitanSimulator';
 
 const App = () => {
   // --- State ---
@@ -301,38 +302,60 @@ const App = () => {
   }
 
   return (
-    // Updated padding-bottom to pb-40 to prevent bottom nav from covering content
-    <div className="min-h-screen bg-[#050505] text-white relative overflow-hidden font-sans selection:bg-sber-green/30 pb-40">
-      <div className="fixed inset-0 z-0 pointer-events-none bg-[#050505]">
-          <div className="absolute top-[-20%] left-[-20%] w-[80vw] h-[80vw] bg-sber-green/5 rounded-full blur-[150px] opacity-30 animate-pulse-slow"></div>
-          <div className="absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-emerald-900/10 rounded-full blur-[120px] opacity-20"></div>
+    // Updated Main Container with Nebula Background
+    <div className="min-h-screen bg-black text-white relative overflow-hidden font-sans selection:bg-purple-500/30 pb-40">
+      
+      {/* Animated Nebula Background */}
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-[-10%] left-[-20%] w-[80vw] h-[80vw] bg-purple-900/20 rounded-full blur-[120px] animate-float opacity-30"></div>
+          <div className="absolute bottom-[-10%] right-[-20%] w-[80vw] h-[80vw] bg-emerald-900/20 rounded-full blur-[120px] animate-pulse-slow opacity-30" style={{ animationDelay: '2s' }}></div>
+          <div className="absolute top-[40%] left-[30%] w-[40vw] h-[40vw] bg-blue-900/10 rounded-full blur-[100px] animate-float opacity-20" style={{ animationDelay: '4s' }}></div>
+          <div className="noise-bg"></div>
       </div>
 
       {currentView !== 'add' && (
-        <div className="sticky top-0 z-40 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5 shadow-sm transition-all duration-300">
+        <div className="sticky top-0 z-40 glass border-b border-white/5 shadow-lg transition-all duration-300">
           <div className="max-w-md mx-auto px-6 py-4 flex items-center justify-between">
+            {/* User Profile */}
             <div className="flex items-center gap-3">
               {user.photoURL ? (
-                  <img src={user.photoURL} alt="User" className="w-10 h-10 rounded-2xl shadow-lg shadow-black/50 object-cover border border-white/10" />
+                  <img src={user.photoURL} alt="User" className="w-10 h-10 rounded-2xl shadow-md border border-white/10 object-cover" />
               ) : (
-                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-zinc-800 to-zinc-700 flex items-center justify-center text-sm font-bold shadow-lg shadow-black/50 border border-white/10">
+                  <div className="w-10 h-10 rounded-2xl bg-surfaceLight flex items-center justify-center text-sm font-bold shadow-md border border-white/10">
                   {user.name.charAt(0) || 'U'}
                   </div>
               )}
               <div className="flex flex-col">
-                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-none mb-1">{t.welcome}</p>
+                <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest leading-none mb-1">{t.welcome}</p>
                 <div className="flex items-center gap-2">
                   <p className="font-bold text-base tracking-wide text-white leading-none">{user.name.split(' ')[0]}</p>
                   {user.isGuest && <span className="text-[9px] bg-yellow-500/10 text-yellow-500 px-1.5 py-0.5 rounded border border-yellow-500/20 font-bold">GUEST</span>}
                 </div>
               </div>
             </div>
-            <button 
-                onClick={() => setUser(u => ({...u, language: u.language === 'en' ? 'ar' : u.language === 'ar' ? 'ru' : 'en'}))}
-                className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 active:scale-90 transition-all border border-white/5 group"
-            >
-              <Globe className="text-gray-400 group-hover:text-white w-5 h-5 transition-colors" />
-            </button>
+
+            {/* Right Side Actions */}
+            <div className="flex items-center gap-3">
+                {/* Titan Simulator Capsule */}
+                <button 
+                  onClick={() => setCurrentView('simulator')}
+                  className="relative group flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1A1A1A] border border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.3)] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)] hover:border-purple-500 transition-all active:scale-95 overflow-hidden"
+                >
+                    {/* Glowing Pulse Background */}
+                    <div className="absolute inset-0 bg-purple-600/10 animate-pulse"></div>
+                    
+                    <BrainCircuit size={16} className="text-purple-400 group-hover:text-purple-300 transition-colors relative z-10" />
+                    <span className="text-[10px] font-bold text-purple-200 uppercase tracking-wider relative z-10 hidden sm:block">Titan</span>
+                </button>
+
+                {/* Language Switcher */}
+                <button 
+                    onClick={() => setUser(u => ({...u, language: u.language === 'en' ? 'ar' : u.language === 'ar' ? 'ru' : 'en'}))}
+                    className="w-10 h-10 flex items-center justify-center rounded-full glass hover:bg-white/10 active:scale-90 transition-all group"
+                >
+                  <Globe className="text-zinc-400 group-hover:text-white w-5 h-5 transition-colors" />
+                </button>
+            </div>
           </div>
         </div>
       )}
@@ -376,6 +399,15 @@ const App = () => {
 
           {currentView === 'ai-advisor' && (
             <AIAdvisor user={user} transactions={transactions} onClose={() => setCurrentView('dashboard')} />
+          )}
+
+          {/* New Titan Simulator View */}
+          {currentView === 'simulator' && (
+            <TitanSimulator 
+              user={user} 
+              transactions={transactions} 
+              onBack={() => setCurrentView('dashboard')} 
+            />
           )}
         </div>
       </main>

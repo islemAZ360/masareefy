@@ -1,5 +1,5 @@
 # Project Code Dump
-Generated: 16/1/2026, 06:37:17
+Generated: 17/1/2026, 06:19:18
 
 ## 🌳 Project Structure
 ```text
@@ -13,6 +13,7 @@ Generated: 16/1/2026, 06:37:17
   ├── RecurringBills.tsx
   ├── Reports.tsx
   ├── SettingsPage.tsx
+  ├── TitanSimulator.tsx
   ├── TransactionItem.tsx
   └── TransactionsPage.tsx
 ├── public
@@ -30,7 +31,8 @@ Generated: 16/1/2026, 06:37:17
   └── manifest.json
 ├── services
   ├── firebase.ts
-  └── geminiService.ts
+  ├── geminiService.ts
+  └── titanService.ts
 ├── .env.local
 ├── App.tsx
 ├── constants.tsx
@@ -131,9 +133,8 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
           
           if (newTotal > user.dailyLimit) {
               // Danger Mode
-              // If you keep spending 'newTotal' every day, how long until 'currentBalance' is 0?
               const currentMoney = user.currentBalance || 0;
-              const burnRate = newTotal; // Assuming this day represents typical burn if reckless
+              const burnRate = newTotal; 
               const daysToDeath = burnRate > 0 ? (currentMoney / burnRate) : 0;
               
               const msg = user.language === 'ar'
@@ -232,12 +233,12 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
       <button 
         onClick={onClick}
         className={`
-            relative h-[4.5rem] rounded-[1.5rem] flex items-center justify-center text-2xl font-medium transition-all duration-100 active:scale-90 select-none
+            relative h-16 rounded-[1.5rem] flex items-center justify-center text-2xl font-medium transition-all duration-150 active:scale-90 select-none
             ${main 
-                ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.4)]' 
+                ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.4)] hover:shadow-[0_0_30px_rgba(255,255,255,0.6)]' 
                 : danger 
-                    ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20' 
-                    : 'bg-[#1C1C1E] text-white hover:bg-[#2C2C2E] border border-white/5'
+                    ? 'glass text-red-500 hover:bg-red-500/20' 
+                    : 'glass text-white hover:bg-white/10'
             }
         `}
       >
@@ -248,7 +249,7 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
   const ToolButton = ({ icon: Icon, label, onClick, active = false }: any) => (
       <button 
         onClick={onClick}
-        className={`flex flex-col items-center justify-center gap-1 h-14 rounded-2xl transition-all active:scale-95 border ${active ? 'bg-white/10 border-white text-white' : 'bg-[#1C1C1E] border-white/5 text-zinc-400 hover:text-white hover:bg-white/5'}`}
+        className={`flex flex-col items-center justify-center gap-1 h-14 rounded-2xl transition-all active:scale-95 border ${active ? 'bg-white/10 border-white text-white shadow-[0_0_15px_rgba(255,255,255,0.2)]' : 'glass border-transparent text-zinc-400 hover:text-white hover:bg-white/5'}`}
       >
           <Icon size={18} />
           <span className="text-[9px] font-bold uppercase tracking-wider">{label}</span>
@@ -256,24 +257,27 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
   );
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-[#050505] text-white overflow-hidden relative">
+    <div className="flex flex-col h-[100dvh] bg-black text-white overflow-y-auto overflow-x-hidden relative">
       
       {/* 1. Top Bar */}
-      <div className="pt-4 px-4 pb-2 flex items-center justify-between z-10">
-          <button onClick={onBack} className="p-3 bg-[#1C1C1E] rounded-full border border-white/5 hover:bg-white/10 transition-colors">
+      <div className="pt-4 px-4 pb-2 flex items-center justify-between z-10 animate-slide-down shrink-0">
+          <button onClick={onBack} className="p-3 glass rounded-full hover:bg-white/10 transition-colors">
               <ChevronLeft size={20} />
           </button>
           
-          <div className="bg-[#1C1C1E] p-1 rounded-full border border-white/10 flex">
+          <div className="glass p-1 rounded-full flex relative overflow-hidden">
+              <div 
+                className={`absolute top-1 bottom-1 w-1/2 bg-white/10 rounded-full transition-all duration-300 ${type === 'income' ? 'left-1/2' : 'left-0'}`}
+              ></div>
               <button 
                 onClick={() => setType(TransactionType.EXPENSE)}
-                className={`px-6 py-2 rounded-full text-xs font-bold transition-all ${type === 'expense' ? 'bg-white text-black shadow-lg' : 'text-zinc-500'}`}
+                className={`relative z-10 px-6 py-2 rounded-full text-xs font-bold transition-all ${type === 'expense' ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-zinc-500'}`}
               >
                 {t.expense}
               </button>
               <button 
                 onClick={() => setType(TransactionType.INCOME)}
-                className={`px-6 py-2 rounded-full text-xs font-bold transition-all ${type === 'income' ? 'bg-sber-green text-white shadow-lg' : 'text-zinc-500'}`}
+                className={`relative z-10 px-6 py-2 rounded-full text-xs font-bold transition-all ${type === 'income' ? 'text-sber-green drop-shadow-[0_0_8px_rgba(33,160,56,0.5)]' : 'text-zinc-500'}`}
               >
                 {t.income}
               </button>
@@ -283,64 +287,69 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
 
       {loadingMsg ? (
          <div className="flex-1 flex flex-col items-center justify-center animate-pulse">
-             <div className="w-24 h-24 bg-sber-green/10 rounded-full flex items-center justify-center border border-sber-green mb-6 relative">
+             <div className="w-28 h-28 bg-sber-green/10 rounded-full flex items-center justify-center border border-sber-green/30 mb-6 relative">
                  <div className="absolute inset-0 rounded-full border-4 border-sber-green border-t-transparent animate-spin"></div>
-                 <Wand2 className="w-10 h-10 text-sber-green" />
+                 <Wand2 className="w-10 h-10 text-sber-green animate-pulse" />
              </div>
-             <p className="font-bold text-sber-green text-lg tracking-wide">{loadingMsg}</p>
+             <p className="font-bold text-sber-green text-lg tracking-wide animate-pulse">{loadingMsg}</p>
          </div>
       ) : showMagicInput ? (
-         <div className="flex-1 px-6 flex flex-col justify-center animate-in zoom-in-95">
+         <div className="flex-1 px-6 flex flex-col justify-center animate-scale-in">
              <div className="flex justify-between items-center mb-6">
                 <h3 className="text-2xl font-bold text-white flex items-center gap-2">
-                    <Wand2 className="text-purple-400" /> Magic Input
+                    <Wand2 className="text-purple-400 animate-pulse" /> Magic Input
                 </h3>
-                <button onClick={() => setShowMagicInput(false)} className="p-2 bg-white/5 rounded-full"><X size={20} /></button>
+                <button onClick={() => setShowMagicInput(false)} className="p-2 glass rounded-full"><X size={20} /></button>
              </div>
              <textarea 
                 value={magicText}
                 onChange={e => setMagicText(e.target.value)}
-                className="w-full h-48 bg-[#1C1C1E] rounded-[2rem] p-6 text-white border border-white/10 focus:border-purple-500 outline-none resize-none mb-6 text-xl placeholder-zinc-600 leading-relaxed"
+                className="w-full h-48 glass-strong rounded-[2rem] p-6 text-white border border-white/10 focus:border-purple-500 focus:shadow-[0_0_30px_rgba(168,85,247,0.2)] outline-none resize-none mb-6 text-xl placeholder-zinc-600 leading-relaxed transition-all"
                 placeholder="Ex: Spent 150 on Groceries at Lulu..."
                 autoFocus
              />
-             <button onClick={handleMagicAnalysis} className="w-full py-5 rounded-[1.5rem] bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-lg shadow-lg shadow-purple-600/30 active:scale-95 transition-transform">
+             <button onClick={handleMagicAnalysis} className="w-full py-5 rounded-[1.5rem] bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-lg shadow-[0_0_30px_rgba(147,51,234,0.4)] active:scale-95 transition-transform hover:shadow-[0_0_50px_rgba(147,51,234,0.6)]">
                  Analyze Text
              </button>
          </div>
       ) : (
          <>
-            {/* 2. Display Area */}
-            <div className="flex-1 flex flex-col items-center justify-center min-h-[180px] relative z-10">
-                <div className="flex flex-col items-center gap-2 animate-in zoom-in duration-300">
-                    <div className="flex items-baseline gap-1">
-                        <span className={`text-7xl font-bold tracking-tighter tabular-nums ${type === 'expense' ? 'text-white' : 'text-sber-green'}`}>
-                            {amountStr}
-                        </span>
-                        <span className="text-2xl text-zinc-500 font-medium">{user.currency}</span>
+            {/* 2. Display Area (Updated Height & Spacing) */}
+            <div className="flex-1 flex flex-col items-center justify-center py-6 pb-8 relative z-10 animate-scale-in shrink-0 min-h-[220px]">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="relative">
+                        {/* Glow Behind Number */}
+                        <div className={`absolute inset-0 blur-[60px] opacity-30 ${type === 'expense' ? 'bg-white' : 'bg-sber-green'}`}></div>
+                        
+                        <div className="flex items-baseline gap-2 relative z-10">
+                            <span className={`text-7xl sm:text-8xl font-bold tracking-tighter tabular-nums drop-shadow-2xl ${type === 'expense' ? 'text-white' : 'text-sber-green'}`}>
+                                {amountStr}
+                            </span>
+                            <span className="text-2xl text-zinc-500 font-medium">{user.currency}</span>
+                        </div>
                     </div>
 
                     {/* Wallet Selector Pill */}
-                    <div className="flex gap-2 mt-2">
+                    <div className="flex gap-3 mt-2">
                         <button 
                             onClick={() => setWallet('spending')}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border ${wallet === 'spending' ? 'bg-zinc-800 border-white/20 text-white shadow-sm' : 'border-transparent bg-transparent text-zinc-600'}`}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border ${wallet === 'spending' ? 'bg-zinc-800 border-white/30 text-white shadow-lg shadow-white/5' : 'border-transparent bg-transparent text-zinc-600 hover:text-zinc-400'}`}
                         >
-                            <Wallet size={12} /> Spending
+                            <Wallet size={14} /> Spending
                         </button>
                         <button 
                             onClick={() => setWallet('savings')}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border ${wallet === 'savings' ? 'bg-[#0f2e1b] border-sber-green/30 text-sber-green shadow-sm' : 'border-transparent bg-transparent text-zinc-600'}`}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border ${wallet === 'savings' ? 'bg-[#0f2e1b] border-sber-green/50 text-sber-green shadow-lg shadow-sber-green/10' : 'border-transparent bg-transparent text-zinc-600 hover:text-zinc-400'}`}
                         >
-                            <PiggyBank size={12} /> Savings
+                            <PiggyBank size={14} /> Savings
                         </button>
                     </div>
                 </div>
             </div>
 
             {/* 3. Category Strip */}
-            <div className="mb-2 pl-4 z-10">
-                <div className="flex gap-3 overflow-x-auto no-scrollbar py-2 pr-4">
+            <div className="mb-6 pl-4 z-10 animate-slide-up shrink-0 relative" style={{ animationDelay: '0.1s' }}>
+                <div className="flex gap-4 overflow-x-auto no-scrollbar py-2 pr-4 items-center">
                     {CATEGORIES.map(cat => {
                         const Icon = (Icons as any)[cat.icon] || Icons.Circle;
                         const isSelected = selectedCategory === cat.id;
@@ -348,15 +357,20 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
                             <button
                                 key={cat.id}
                                 onClick={() => setSelectedCategory(cat.id)}
-                                className={`flex flex-col items-center gap-1.5 min-w-[4.5rem] transition-all duration-300 group ${isSelected ? 'scale-105' : 'opacity-50 grayscale hover:opacity-100 hover:grayscale-0'}`}
+                                className={`flex flex-col items-center gap-2 min-w-[4.5rem] transition-all duration-300 group ${isSelected ? 'scale-110 -translate-y-1' : 'opacity-60 hover:opacity-100'}`}
                             >
                                 <div 
-                                    className={`w-14 h-14 rounded-[1.2rem] flex items-center justify-center shadow-lg transition-all ${isSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-black' : 'group-hover:bg-white/10'}`}
-                                    style={{ backgroundColor: isSelected ? cat.color : '#1C1C1E', border: isSelected ? 'none' : '1px solid rgba(255,255,255,0.05)' }}
+                                    className={`w-14 h-14 rounded-[1.5rem] flex items-center justify-center shadow-lg transition-all relative overflow-hidden`}
+                                    style={{ 
+                                        backgroundColor: isSelected ? cat.color : '#1C1C1E', 
+                                        border: isSelected ? 'none' : '1px solid rgba(255,255,255,0.05)',
+                                        boxShadow: isSelected ? `0 10px 30px -10px ${cat.color}80` : 'none'
+                                    }}
                                 >
-                                    <Icon size={22} className="text-white" />
+                                    {isSelected && <div className="absolute inset-0 bg-white/20 animate-pulse-slow"></div>}
+                                    <Icon size={22} className="text-white relative z-10" />
                                 </div>
-                                <span className={`text-[10px] font-bold truncate max-w-full ${isSelected ? 'text-white' : 'text-zinc-500'}`}>
+                                <span className={`text-[10px] font-bold truncate max-w-full tracking-wide ${isSelected ? 'text-white drop-shadow-md' : 'text-zinc-500'}`}>
                                     {user.language === 'ar' ? cat.name_ar : cat.name_en}
                                 </span>
                             </button>
@@ -365,8 +379,8 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
                 </div>
             </div>
 
-            {/* 4. Tools & Keypad Container */}
-            <div className="bg-[#0A0A0A] rounded-t-[2.5rem] p-4 pb-8 border-t border-white/5 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-20">
+            {/* 4. Tools & Keypad Container (Compact) */}
+            <div className="glass-panel rounded-t-[2.5rem] p-5 pb-32 border-t border-white/10 shadow-[0_-20px_60px_rgba(0,0,0,0.8)] z-20 animate-slide-up shrink-0" style={{ animationDelay: '0.2s' }}>
                 
                 {/* Tools Row */}
                 <div className="grid grid-cols-4 gap-3 mb-4">
@@ -381,7 +395,7 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
                         active={false}
                     />
                     <ToolButton 
-                        icon={PenLine} label={note ? "Edit Note" : "Note"} 
+                        icon={PenLine} label={note ? "Edit" : "Note"} 
                         onClick={() => setShowNoteModal(true)} 
                         active={!!note}
                     />
@@ -395,14 +409,14 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
                 {/* Hidden File Input */}
                 <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
 
-                {/* Keypad Grid */}
+                {/* Keypad Grid (Tight Spacing) */}
                 <div className="grid grid-cols-4 gap-3">
                     <NumpadButton onClick={() => handleNumPress('1')}>1</NumpadButton>
                     <NumpadButton onClick={() => handleNumPress('2')}>2</NumpadButton>
                     <NumpadButton onClick={() => handleNumPress('3')}>3</NumpadButton>
                     <button 
                         onClick={handleDelete} 
-                        className="bg-[#1C1C1E] rounded-[1.5rem] flex items-center justify-center text-red-400 hover:bg-red-500/10 active:scale-90 transition-all border border-white/5"
+                        className="glass rounded-[1.5rem] flex items-center justify-center text-red-400 hover:bg-red-500/10 active:scale-90 transition-all"
                     >
                         <Delete size={24} />
                     </button>
@@ -410,18 +424,18 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
                     <NumpadButton onClick={() => handleNumPress('4')}>4</NumpadButton>
                     <NumpadButton onClick={() => handleNumPress('5')}>5</NumpadButton>
                     <NumpadButton onClick={() => handleNumPress('6')}>6</NumpadButton>
-                    {/* Big Save Button Spanning 2 Rows */}
+                    
+                    {/* Big Save Button */}
                     <button 
                         onClick={handleSave}
                         disabled={parseFloat(amountStr) === 0}
-                        className={`row-span-2 rounded-[1.5rem] flex flex-col items-center justify-center gap-1 transition-all active:scale-95 ${
+                        className={`row-span-2 rounded-[1.5rem] flex flex-col items-center justify-center gap-1 transition-all active:scale-95 duration-300 ${
                             parseFloat(amountStr) > 0 
-                            ? (type === 'expense' ? 'bg-white text-black shadow-[0_0_25px_rgba(255,255,255,0.3)]' : 'bg-sber-green text-white shadow-[0_0_25px_rgba(33,160,56,0.3)]') 
-                            : 'bg-zinc-800 text-zinc-600'
+                            ? (type === 'expense' ? 'bg-white text-black shadow-[0_0_40px_rgba(255,255,255,0.4)] hover:shadow-[0_0_60px_rgba(255,255,255,0.6)]' : 'bg-sber-green text-white shadow-[0_0_40px_rgba(33,160,56,0.4)] hover:shadow-[0_0_60px_rgba(33,160,56,0.6)]') 
+                            : 'glass-strong text-zinc-600'
                         }`}
                     >
                         <Check size={32} strokeWidth={3} />
-                        <span className="text-[10px] font-bold uppercase tracking-widest">{t.save}</span>
                     </button>
 
                     <NumpadButton onClick={() => handleNumPress('7')}>7</NumpadButton>
@@ -431,49 +445,51 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
                     <NumpadButton onClick={() => handleNumPress('.')}>.</NumpadButton>
                     <NumpadButton onClick={() => handleNumPress('0')}>0</NumpadButton>
                     <div className="flex items-center justify-center">
-                        <span className="text-xs text-zinc-600 font-mono">v2.1</span>
+                        <span className="text-[10px] text-zinc-600 font-mono tracking-widest opacity-50">v2.5</span>
                     </div>
                 </div>
             </div>
 
             {/* Note Modal */}
             {showNoteModal && (
-                <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center sm:p-4">
+                <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center sm:p-4 animate-fade-in">
                     <div className="absolute inset-0" onClick={() => setShowNoteModal(false)} />
-                    <div className="relative w-full max-w-sm bg-[#1C1C1E] border border-white/10 rounded-t-[2rem] sm:rounded-[2rem] p-6 animate-in slide-in-from-bottom-full">
-                        <h3 className="text-lg font-bold text-white mb-4">Add Note & Vendor</h3>
+                    <div className="relative w-full max-w-sm glass-strong border border-white/10 rounded-t-[2.5rem] sm:rounded-[2.5rem] p-8 animate-slide-up shadow-2xl">
+                        <div className="w-12 h-1 bg-white/20 rounded-full mx-auto mb-6"></div>
+                        <h3 className="text-xl font-bold text-white mb-6 text-center">Add Details</h3>
                         <input 
                             type="text" 
                             placeholder="Vendor Name (e.g. Starbucks)" 
                             value={vendor}
                             onChange={e => setVendor(e.target.value)}
-                            className="w-full bg-black/50 p-4 rounded-xl border border-white/10 text-white mb-3 outline-none focus:border-white/30"
+                            className="w-full bg-black/50 p-5 rounded-2xl border border-white/10 text-white mb-4 outline-none focus:border-white/30 transition-all placeholder-zinc-600"
                             autoFocus
                         />
                         <textarea 
                             placeholder="Additional notes..." 
                             value={note}
                             onChange={e => setNote(e.target.value)}
-                            className="w-full bg-black/50 p-4 rounded-xl border border-white/10 text-white h-24 resize-none outline-none focus:border-white/30"
+                            className="w-full bg-black/50 p-5 rounded-2xl border border-white/10 text-white h-32 resize-none outline-none focus:border-white/30 transition-all placeholder-zinc-600"
                         />
-                        <button onClick={() => setShowNoteModal(false)} className="w-full bg-white text-black font-bold py-4 rounded-xl mt-4">Done</button>
+                        <button onClick={() => setShowNoteModal(false)} className="w-full bg-white text-black font-bold py-5 rounded-2xl mt-6 shadow-lg hover:bg-gray-200 transition-colors">Done</button>
                     </div>
                 </div>
             )}
 
             {/* Date Modal */}
             {showDateModal && (
-                <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center sm:p-4">
+                <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center sm:p-4 animate-fade-in">
                     <div className="absolute inset-0" onClick={() => setShowDateModal(false)} />
-                    <div className="relative w-full max-w-sm bg-[#1C1C1E] border border-white/10 rounded-t-[2rem] sm:rounded-[2rem] p-6 animate-in slide-in-from-bottom-full">
-                        <h3 className="text-lg font-bold text-white mb-4">Select Date</h3>
+                    <div className="relative w-full max-w-sm glass-strong border border-white/10 rounded-t-[2.5rem] sm:rounded-[2.5rem] p-8 animate-slide-up shadow-2xl">
+                        <div className="w-12 h-1 bg-white/20 rounded-full mx-auto mb-6"></div>
+                        <h3 className="text-xl font-bold text-white mb-6 text-center">Select Date</h3>
                         <input 
                             type="date" 
                             value={date}
                             onChange={e => setDate(e.target.value)}
-                            className="w-full bg-black/50 p-4 rounded-xl border border-white/10 text-white outline-none focus:border-white/30 text-center text-lg"
+                            className="w-full bg-black/50 p-5 rounded-2xl border border-white/10 text-white outline-none focus:border-white/30 text-center text-xl font-bold transition-all"
                         />
-                        <button onClick={() => setShowDateModal(false)} className="w-full bg-white text-black font-bold py-4 rounded-xl mt-4">Confirm</button>
+                        <button onClick={() => setShowDateModal(false)} className="w-full bg-white text-black font-bold py-5 rounded-2xl mt-6 shadow-lg hover:bg-gray-200 transition-colors">Confirm</button>
                     </div>
                 </div>
             )}
@@ -1077,9 +1093,9 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
   const isOverBudget = dailyLimit > 0 && todaySpent > dailyLimit;
   const progressPercent = dailyLimit > 0 ? Math.min((todaySpent / dailyLimit) * 100, 100) : 0;
   
-  let gaugeColor = 'bg-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.5)]'; // Safe
-  if (progressPercent > 75) gaugeColor = 'bg-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)]'; // Warning
-  if (progressPercent >= 100) gaugeColor = 'bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.6)]'; // Danger
+  let gaugeColor = 'bg-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.6)]'; // Safe Neon
+  if (progressPercent > 75) gaugeColor = 'bg-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.6)]'; // Warning Neon
+  if (progressPercent >= 100) gaugeColor = 'bg-red-500 shadow-[0_0_25px_rgba(239,68,68,0.8)]'; // Danger Neon
 
   // --- Logic: Salary Countdown ---
   const calculateDaysToSalary = () => {
@@ -1110,15 +1126,6 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
       return { dailyBurn, daysToZero };
   };
   const burnStats = calculateBurnRate();
-
-  const detectedSub = (() => {
-      const counts: Record<number, number> = {};
-      transactions.filter(t => t.type === 'expense').forEach(t => {
-          counts[t.amount] = (counts[t.amount] || 0) + 1;
-      });
-      const subAmount = Object.keys(counts).find(k => counts[Number(k)] > 1 && Number(k) > 0);
-      return subAmount ? Number(subAmount) : null;
-  })();
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
@@ -1158,27 +1165,30 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
   }) => (
       <div 
         onClick={onClick}
-        className={`absolute inset-0 rounded-[2rem] p-6 flex flex-col justify-between cursor-pointer overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+        className={`absolute inset-0 rounded-[2rem] p-6 flex flex-col justify-between cursor-pointer overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] border border-white/5 ${
             isActive 
             ? 'z-20 opacity-100 translate-y-0 scale-100 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)]' 
-            : 'z-10 opacity-60 translate-y-6 scale-95 hover:translate-y-4 brightness-50 grayscale-[0.5]'
+            : 'z-10 opacity-40 translate-y-8 scale-90 hover:translate-y-6 brightness-50 grayscale-[0.8] hover:grayscale-[0.5]'
         }`}
         style={{ 
             backgroundColor: bgColor, 
             color: textColor,
-            boxShadow: isActive ? `0 25px 50px -12px ${bgColor}40` : 'none'
+            boxShadow: isActive ? `0 25px 60px -15px ${bgColor}50` : 'none'
         }}
       >
          <NoiseTexture />
          
+         {/* Holographic Shine */}
+         <div className={`absolute inset-0 bg-gradient-to-tr from-white/0 via-white/10 to-white/0 skew-x-12 opacity-0 group-hover:opacity-100 animate-shimmer transition-opacity pointer-events-none ${isActive ? 'block' : 'hidden'}`} style={{backgroundSize: '200% 100%'}}></div>
+         
          {/* Glossy Reflection */}
-         <div className="absolute -top-20 -right-20 w-64 h-64 bg-white opacity-10 rounded-full blur-3xl pointer-events-none"></div>
+         <div className="absolute -top-32 -right-32 w-80 h-80 bg-white opacity-5 rounded-full blur-[80px] pointer-events-none"></div>
          
          <div className="relative z-10 flex justify-between items-start">
              <div className="flex flex-col gap-4">
                  <div className="flex items-center gap-2 opacity-80">
                     <span className="text-[10px] font-bold uppercase tracking-[0.2em]">{type === 'spending' ? 'DEBIT' : 'SAVINGS'}</span>
-                    <div className="w-1 h-1 rounded-full bg-current"></div>
+                    <div className="w-1 h-1 rounded-full bg-current animate-pulse"></div>
                     <span className="text-[10px] font-bold uppercase tracking-wider">WORLD</span>
                  </div>
                  <EMVChip />
@@ -1189,10 +1199,10 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
          <div className="relative z-10 mt-auto">
              <div className="flex justify-between items-end">
                  <div>
-                    <h2 className="text-3xl font-mono font-bold tracking-tighter tabular-nums mb-1 drop-shadow-md">
+                    <h2 className="text-4xl font-mono font-bold tracking-tighter tabular-nums mb-1 drop-shadow-lg">
                         {balance.toLocaleString()} <span className="text-base opacity-70">{user.currency}</span>
                     </h2>
-                    <p className="font-mono text-xs tracking-[0.15em] opacity-60">
+                    <p className="font-mono text-xs tracking-[0.2em] opacity-60">
                         •••• •••• •••• {user.apiKey ? user.apiKey.slice(-4) : '8888'}
                     </p>
                  </div>
@@ -1210,28 +1220,16 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
   );
 
   return (
-    <div className="space-y-6 pb-32 relative">
+    <div className="space-y-8 pb-32 relative">
       
-      {/* Header */}
-      <div className="flex justify-between items-center px-2 pt-4">
-        <div>
-           <p className="text-zinc-400 text-xs font-medium uppercase tracking-wider mb-0.5">{greeting}</p>
-           <h1 className="text-3xl font-bold text-white tracking-tight">{user.name.split(' ')[0]}</h1>
-        </div>
-        <button onClick={() => onChangeView('settings')} className="relative group">
-           <div className="absolute inset-0 bg-sber-green rounded-full blur-lg opacity-20 group-hover:opacity-40 transition-opacity"></div>
-           {user.photoURL ? (
-             <img src={user.photoURL} className="relative w-12 h-12 rounded-full border-2 border-white/10 object-cover" alt="profile" />
-           ) : (
-             <div className="relative w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center border-2 border-zinc-700">
-                <span className="text-lg font-bold text-white">{user.name.charAt(0)}</span>
-             </div>
-           )}
-        </button>
+      {/* Greeting - Slide Down */}
+      <div className="px-2 pt-2 animate-slide-down">
+        <p className="text-zinc-400 text-xs font-medium uppercase tracking-wider mb-0.5">{greeting}</p>
+        <h1 className="text-3xl font-bold text-white tracking-tight">{user.name.split(' ')[0]}</h1>
       </div>
 
       {/* 1. Stacked Cards Area */}
-      <div className="relative h-[240px] w-full perspective-1000 group">
+      <div className="relative h-[240px] w-full perspective-1000 group animate-slide-up" style={{ animationDelay: '0.1s' }}>
           {/* Savings Card */}
           <PremiumCard 
             type="savings" 
@@ -1258,23 +1256,24 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
       </div>
 
       {/* 2. Neon Daily Gauge */}
-      <div className="px-1">
+      <div className="px-1 animate-slide-up" style={{ animationDelay: '0.2s' }}>
         {dailyLimit > 0 ? (
-            <div className="bg-[#121214]/80 backdrop-blur-xl p-5 rounded-[2rem] border border-white/5 relative overflow-hidden group">
-                <div className={`absolute top-0 left-0 w-1 h-full ${gaugeColor.split(' ')[0]}`}></div>
+            <div className="glass-panel p-5 rounded-[2rem] relative overflow-hidden group">
+                {/* Side Glow Line */}
+                <div className={`absolute top-0 left-0 w-1 h-full ${gaugeColor.split(' ')[0]} shadow-[0_0_15px_currentColor]`}></div>
                 
-                <div className="flex justify-between items-end mb-3 relative z-10">
+                <div className="flex justify-between items-end mb-4 relative z-10">
                     <div>
-                        <div className="flex items-center gap-2 mb-1">
-                            <Target size={14} className={isOverBudget ? 'text-red-500' : 'text-emerald-400'} />
+                        <div className="flex items-center gap-2 mb-1.5">
+                            <Target size={14} className={isOverBudget ? 'text-red-500 animate-pulse' : 'text-emerald-400'} />
                             <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{user.language === 'ar' ? 'ميزانية اليوم' : 'Daily Limit'}</span>
                         </div>
-                        <h3 className="text-3xl font-bold text-white tabular-nums tracking-tight">
+                        <h3 className="text-3xl font-bold text-white tabular-nums tracking-tight drop-shadow-md">
                             {todaySpent.toLocaleString()} <span className="text-sm text-zinc-600 font-medium">/ {dailyLimit}</span>
                         </h3>
                     </div>
                     <div className="text-right">
-                         <div className={`text-[10px] font-bold px-3 py-1.5 rounded-full backdrop-blur-md border border-white/5 ${isOverBudget ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                         <div className={`text-[10px] font-bold px-3 py-1.5 rounded-full backdrop-blur-md border border-white/5 shadow-lg ${isOverBudget ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'}`}>
                             {isOverBudget 
                                 ? (user.language === 'ar' ? 'تجاوزت الحد' : 'OVER LIMIT') 
                                 : `${Math.round((todaySpent/dailyLimit)*100)}% USED`
@@ -1284,12 +1283,12 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
                 </div>
 
                 {/* Neon Progress Bar */}
-                <div className="h-3 bg-zinc-900 rounded-full overflow-hidden relative z-10 shadow-inner border border-white/5">
+                <div className="h-3 bg-black/50 rounded-full overflow-hidden relative z-10 shadow-inner border border-white/5">
                     <div 
                         className={`h-full rounded-full transition-all duration-1000 ease-out relative ${gaugeColor} ${isOverBudget ? 'animate-pulse' : ''}`}
                         style={{ width: `${progressPercent}%` }}
                     >
-                        <div className="absolute right-0 top-0 bottom-0 w-2 bg-white/50 blur-[2px]"></div>
+                        <div className="absolute right-0 top-0 bottom-0 w-4 bg-white/60 blur-[4px]"></div>
                     </div>
                 </div>
                 
@@ -1299,29 +1298,29 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
         ) : (
             <button 
                 onClick={() => onChangeView('settings')}
-                className="w-full bg-[#1C1C1E] p-5 rounded-[2rem] border border-dashed border-zinc-800 flex items-center justify-center gap-2 text-zinc-500 hover:text-white hover:border-zinc-600 transition-all hover:bg-white/5"
+                className="w-full glass p-6 rounded-[2rem] border border-dashed border-zinc-700 flex items-center justify-center gap-3 text-zinc-500 hover:text-white hover:border-zinc-500 transition-all hover:bg-white/5 active:scale-95"
             >
-                <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
-                    <Target size={16} />
+                <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
+                    <Target size={18} />
                 </div>
-                <span className="text-xs font-bold">{user.language === 'ar' ? 'تحديد خطة صرف يومية' : 'Setup Budget Plan'}</span>
+                <span className="text-xs font-bold uppercase tracking-wider">{user.language === 'ar' ? 'تحديد خطة صرف يومية' : 'Setup Budget Plan'}</span>
             </button>
         )}
       </div>
 
       {/* 3. Salary Countdown Pill */}
       {salaryData && salaryData.days > 0 && (
-          <div className="px-1">
-              <div className="bg-gradient-to-r from-[#1C1C1E] to-[#121214] rounded-[1.5rem] p-1 border border-white/5 flex items-center relative overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 to-transparent"></div>
+          <div className="px-1 animate-slide-up" style={{ animationDelay: '0.3s' }}>
+              <div className="glass p-1.5 rounded-[1.8rem] border border-white/5 flex items-center relative overflow-hidden group">
+                  <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                   
-                  <div className="bg-[#2C2C2E] p-3 rounded-[1.2rem] text-purple-400 z-10 m-1">
+                  <div className="bg-[#18181b] p-3.5 rounded-[1.4rem] text-purple-400 z-10 shadow-lg border border-white/5">
                       <CalendarClock size={20} />
                   </div>
-                  <div className="flex-1 px-3 z-10 flex justify-between items-center">
+                  <div className="flex-1 px-4 z-10 flex justify-between items-center">
                       <div>
                           <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Payday in</p>
-                          <p className="text-lg font-bold text-white leading-none">{salaryData.days} Days</p>
+                          <p className="text-xl font-bold text-white leading-none tracking-tight">{salaryData.days} Days</p>
                       </div>
                       
                       {/* Circular Progress Mini */}
@@ -1334,6 +1333,7 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
                                 strokeDasharray="100" 
                                 strokeDashoffset={100 - ((salaryData.totalInterval - salaryData.days) / salaryData.totalInterval) * 100} 
                                 strokeLinecap="round"
+                                className="drop-shadow-[0_0_4px_rgba(168,85,247,0.5)]"
                               />
                           </svg>
                       </div>
@@ -1344,16 +1344,16 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
 
       {/* 4. Alerts & Insights */}
       {burnStats && burnStats.daysToZero < 10 && salaryData && salaryData.days > burnStats.daysToZero && (
-          <div className="px-1 animate-pulse">
-              <div className={`rounded-[1.5rem] p-4 border flex items-start gap-4 shadow-lg ${user.selectedPlan === 'austerity' ? 'bg-red-950/30 border-red-500/30' : 'bg-yellow-950/30 border-yellow-500/30'}`}>
-                  <div className={`p-3 rounded-full shrink-0 ${user.selectedPlan === 'austerity' ? 'bg-red-500/20 text-red-500' : 'bg-yellow-500/20 text-yellow-500'}`}>
+          <div className="px-1 animate-slide-up" style={{ animationDelay: '0.35s' }}>
+              <div className={`rounded-[2rem] p-5 border flex items-start gap-4 shadow-lg backdrop-blur-md ${user.selectedPlan === 'austerity' ? 'bg-red-950/40 border-red-500/30' : 'bg-yellow-950/40 border-yellow-500/30'}`}>
+                  <div className={`p-3 rounded-2xl shrink-0 ${user.selectedPlan === 'austerity' ? 'bg-red-500/20 text-red-500' : 'bg-yellow-500/20 text-yellow-500'}`}>
                     {user.selectedPlan === 'austerity' ? <Skull size={20} /> : <AlertTriangle size={20} />}
                   </div>
                   <div>
                       <h4 className={`font-bold text-sm ${user.selectedPlan === 'austerity' ? 'text-red-400' : 'text-yellow-400'}`}>
                           {user.selectedPlan === 'austerity' ? "Critical Condition" : "Funds Low"}
                       </h4>
-                      <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                      <p className="text-xs text-zinc-300 mt-1 leading-relaxed">
                           {user.selectedPlan === 'austerity' 
                             ? `Estimated runway: ${burnStats.daysToZero.toFixed(0)} days. Salary in ${salaryData.days} days.`
                             : `Runway: ${burnStats.daysToZero.toFixed(0)} days. Switch to Austerity recommended.`
@@ -1365,57 +1365,59 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
       )}
 
       {/* 5. Glassy Action Grid */}
-      <div className="grid grid-cols-2 gap-3 px-1">
+      <div className="grid grid-cols-2 gap-3 px-1 animate-slide-up" style={{ animationDelay: '0.4s' }}>
           <button 
              onClick={() => onChangeView('add')}
-             className="group bg-[#1C1C1E] hover:bg-[#252527] p-5 rounded-[2rem] border border-white/5 flex flex-col items-center gap-3 transition-all active:scale-95 relative overflow-hidden"
+             className="group glass p-5 rounded-[2rem] flex flex-col items-center gap-3 transition-all active:scale-95 hover:bg-white/5 border border-white/5 hover:border-white/10 relative overflow-hidden"
           >
              <div className="absolute inset-0 bg-gradient-to-tr from-sber-green/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-             <div className="w-12 h-12 bg-sber-green/10 rounded-2xl flex items-center justify-center text-sber-green group-hover:scale-110 transition-transform duration-300">
+             <div className="w-12 h-12 bg-sber-green/10 rounded-2xl flex items-center justify-center text-sber-green group-hover:scale-110 transition-transform duration-300 border border-sber-green/20 group-hover:shadow-[0_0_20px_rgba(33,160,56,0.3)]">
                  <ArrowUpRight size={24} />
              </div>
-             <span className="text-xs font-bold text-zinc-300 group-hover:text-white uppercase tracking-widest">{t.add}</span>
+             <span className="text-xs font-bold text-zinc-400 group-hover:text-white uppercase tracking-widest transition-colors">{t.add}</span>
           </button>
           
           <button 
              onClick={() => onChangeView('transactions')}
-             className="group bg-[#1C1C1E] hover:bg-[#252527] p-5 rounded-[2rem] border border-white/5 flex flex-col items-center gap-3 transition-all active:scale-95 relative overflow-hidden"
+             className="group glass p-5 rounded-[2rem] flex flex-col items-center gap-3 transition-all active:scale-95 hover:bg-white/5 border border-white/5 hover:border-white/10 relative overflow-hidden"
           >
              <div className="absolute inset-0 bg-gradient-to-tl from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-             <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform duration-300">
+             <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform duration-300 border border-blue-500/20 group-hover:shadow-[0_0_20px_rgba(59,130,246,0.3)]">
                  <TrendingUp size={24} />
              </div>
-             <span className="text-xs font-bold text-zinc-300 group-hover:text-white uppercase tracking-widest">History</span>
+             <span className="text-xs font-bold text-zinc-400 group-hover:text-white uppercase tracking-widest transition-colors">History</span>
           </button>
       </div>
 
       {/* AI Advisor Banner */}
-      <button 
-        onClick={onOpenAI}
-        className="mx-1 relative group overflow-hidden rounded-[2rem] p-1 pr-6 flex items-center justify-between transition-all"
-      >
-         <div className="absolute inset-0 bg-gradient-to-r from-indigo-900/40 to-purple-900/40 border border-white/5 rounded-[2rem]"></div>
-         <div className="absolute inset-0 opacity-20 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] mix-blend-overlay"></div>
-         
-         <div className="flex items-center gap-4 relative z-10">
-            <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[1.7rem] flex items-center justify-center shadow-lg shadow-purple-500/30 group-hover:rotate-3 transition-transform">
-                <Sparkles className="text-white w-7 h-7 fill-current animate-pulse" />
+      <div className="px-1 animate-slide-up" style={{ animationDelay: '0.5s' }}>
+        <button 
+            onClick={onOpenAI}
+            className="w-full relative group overflow-hidden rounded-[2.5rem] p-1 pr-6 flex items-center justify-between transition-all border border-indigo-500/30 hover:border-indigo-500/50"
+        >
+            <div className="absolute inset-0 bg-gradient-to-r from-indigo-900/60 to-purple-900/60 rounded-[2.5rem]"></div>
+            <div className="absolute inset-0 opacity-20 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] mix-blend-overlay"></div>
+            
+            <div className="flex items-center gap-4 relative z-10">
+                <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[2rem] flex items-center justify-center shadow-[0_0_20px_rgba(129,140,248,0.4)] group-hover:scale-105 transition-transform duration-500">
+                    <Sparkles className="text-white w-7 h-7 fill-current animate-pulse" />
+                </div>
+                <div className="text-left">
+                    <h3 className="font-bold text-white text-lg drop-shadow-md">AI Advisor</h3>
+                    <p className="text-xs text-indigo-200 font-medium">Generate insights report</p>
+                </div>
             </div>
-            <div className="text-left">
-                <h3 className="font-bold text-white text-lg">AI Advisor</h3>
-                <p className="text-xs text-indigo-200">Generate insights report</p>
+            <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center relative z-10 group-hover:bg-white/20 transition-colors backdrop-blur-sm border border-white/10">
+                <ChevronRight className="text-white w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
             </div>
-         </div>
-         <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center relative z-10 group-hover:bg-white/20 transition-colors">
-            <ChevronRight className="text-white w-4 h-4" />
-         </div>
-      </button>
+        </button>
+      </div>
 
       {/* Recurring Bills */}
-      <div className="pt-2 px-1">
+      <div className="pt-2 px-1 animate-slide-up" style={{ animationDelay: '0.6s' }}>
          <div className="flex items-center gap-2 mb-4 px-2">
-             <div className="w-1 h-4 bg-zinc-700 rounded-full"></div>
-             <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">{t.fixed_bills}</h3>
+             <div className="w-1 h-4 bg-zinc-600 rounded-full"></div>
+             <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">{t.fixed_bills}</h3>
          </div>
          <RecurringBills user={user} onPayBill={onPayBill} onAddBill={onAddBill} onDeleteBill={onDeleteBill} />
       </div>
@@ -1423,19 +1425,19 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
       {/* Rename Modal */}
       {renamingWallet && (
          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setRenamingWallet(null)} />
-            <div className="relative bg-[#1C1C1E] border border-white/10 w-full max-w-xs rounded-3xl p-6 animate-in zoom-in-95 shadow-2xl">
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setRenamingWallet(null)} />
+            <div className="relative glass-strong border border-white/10 w-full max-w-xs rounded-[2rem] p-6 animate-scale-in shadow-2xl">
                 <h3 className="text-base font-bold text-white mb-4 text-center">Rename Wallet</h3>
                 <input 
                     type="text" 
                     value={tempName}
                     onChange={(e) => setTempName(e.target.value)}
-                    className="w-full bg-black/50 p-4 rounded-2xl border border-zinc-700 text-white text-center font-bold focus:border-sber-green outline-none mb-4"
+                    className="w-full bg-black/50 p-4 rounded-2xl border border-zinc-700 text-white text-center font-bold focus:border-sber-green focus:shadow-[0_0_15px_rgba(33,160,56,0.3)] outline-none mb-4 transition-all"
                     autoFocus
                 />
                 <div className="flex gap-3">
-                    <button onClick={() => setRenamingWallet(null)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 py-3 rounded-xl text-xs font-bold text-zinc-400">Cancel</button>
-                    <button onClick={handleSaveRename} className="flex-1 bg-sber-green hover:bg-emerald-600 py-3 rounded-xl text-xs font-bold text-white shadow-lg shadow-emerald-900/20">Save</button>
+                    <button onClick={() => setRenamingWallet(null)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 py-3 rounded-xl text-xs font-bold text-zinc-400 transition-colors">Cancel</button>
+                    <button onClick={handleSaveRename} className="flex-1 bg-sber-green hover:bg-emerald-600 py-3 rounded-xl text-xs font-bold text-white shadow-lg shadow-emerald-900/20 transition-all active:scale-95">Save</button>
                 </div>
             </div>
          </div>
@@ -1473,18 +1475,18 @@ export const Navigation: React.FC<Props> = ({ currentView, onNavigate }) => {
   };
 
   return (
-    <div className="fixed bottom-8 left-0 right-0 z-50 flex justify-center pointer-events-none">
-       <nav className="bg-[#161618]/90 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] px-8 py-4 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.8)] flex items-center gap-8 pointer-events-auto transition-transform duration-300">
+    <div className="fixed bottom-6 left-0 right-0 z-50 flex justify-center pointer-events-none px-4">
+       <nav className="bg-[#0A0A0A]/95 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] px-6 py-3 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.9)] flex items-center justify-between w-full max-w-sm pointer-events-auto transition-transform duration-300">
           
           <NavItem view="dashboard" icon={Home} />
           <NavItem view="transactions" icon={List} />
 
-          {/* Central Add Button */}
+          {/* Central Add Button (Restored to Center) */}
           <button 
               onClick={() => onNavigate('add')}
-              className="w-16 h-16 bg-white text-black rounded-[1.2rem] flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95 transition-all duration-300 -mt-10 border-4 border-[#050505] relative z-20 group"
+              className="w-14 h-14 bg-white text-black rounded-[1.2rem] flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95 transition-all duration-300 -mt-8 border-4 border-[#050505] relative z-20 group shrink-0"
           >
-              <Plus size={32} strokeWidth={3} className="group-hover:rotate-90 transition-transform duration-300" />
+              <Plus size={28} strokeWidth={3} className="group-hover:rotate-90 transition-transform duration-300" />
           </button>
 
           <NavItem view="reports" icon={PieIcon} />
@@ -1504,7 +1506,7 @@ import { UserSettings, Currency, Language, RecurringBill } from '../types';
 import { TRANSLATIONS, RUSSIAN_BANKS } from '../constants';
 import { validateApiKey, analyzeOnboardingData, OnboardingAnalysisResult } from '../services/geminiService';
 import { signInWithGoogle, auth, getUserData } from '../services/firebase';
-import { Wallet, Check, ImageIcon, DollarSign, Upload, Zap, ArrowRight, Plus, UserCircle2, Key, CheckCircle2, Loader2, PiggyBank, CalendarClock, ChevronDown, Sparkles } from 'lucide-react';
+import { Wallet, Check, ImageIcon, DollarSign, Upload, Zap, ArrowRight, Plus, UserCircle2, Key, CheckCircle2, Loader2, PiggyBank, CalendarClock, ChevronDown, Sparkles, ScanLine, Smartphone, CreditCard, ShieldCheck } from 'lucide-react';
 
 interface BankDetails {
     name: string;
@@ -1529,22 +1531,23 @@ interface Props {
 
 // --- Visual Components ---
 
-const AuroraBackground = () => (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[80vw] h-[80vw] bg-purple-500/20 rounded-full blur-[120px] animate-pulse-slow"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[80vw] h-[80vw] bg-emerald-500/10 rounded-full blur-[120px] animate-pulse-slow" style={{ animationDelay: '2s' }}></div>
-        <div className="absolute top-[40%] left-[30%] w-[40vw] h-[40vw] bg-blue-600/10 rounded-full blur-[100px] animate-pulse-slow" style={{ animationDelay: '4s' }}></div>
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
+const AmbientBackground = () => (
+    <div className="fixed inset-0 overflow-hidden pointer-events-none z-0 bg-[#000000]">
+        <div className="absolute top-[-20%] left-[-20%] w-[80vw] h-[80vw] bg-purple-900/10 rounded-full blur-[120px] animate-pulse-slow"></div>
+        <div className="absolute bottom-[-20%] right-[-20%] w-[80vw] h-[80vw] bg-emerald-900/10 rounded-full blur-[120px] animate-pulse-slow" style={{ animationDelay: '2s' }}></div>
+        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5 mix-blend-overlay"></div>
     </div>
 );
 
 const GlassCard = ({ children, className = '' }: { children: React.ReactNode, className?: string }) => (
-    <div className={`relative z-10 bg-black/40 backdrop-blur-xl border border-white/10 shadow-2xl rounded-[2.5rem] p-8 ${className}`}>
+    <div className={`relative z-10 bg-[#09090b]/80 backdrop-blur-2xl border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] rounded-[2.5rem] p-8 overflow-hidden ${className}`}>
+        {/* Holographic Edge */}
+        <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
         {children}
     </div>
 );
 
-// Helper: Bank Selector Component (Styled)
+// Helper: Bank Selector Component (Modern Tiles)
 const BankSelector = ({ 
     selectedId, 
     onSelect, 
@@ -1564,13 +1567,13 @@ const BankSelector = ({
 
     return (
         <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-4 gap-3 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
                 {RUSSIAN_BANKS.filter(b => b.id !== 'other').map(bank => (
                     <button
                         key={bank.id}
                         type="button"
                         onClick={() => onSelect(bank.id)}
-                        className={`group flex flex-col items-center gap-2 p-3 rounded-2xl transition-all border ${selectedId === bank.id ? 'bg-white/10 border-sber-green shadow-[0_0_15px_rgba(33,160,56,0.3)] scale-105' : 'bg-black/20 border-white/5 hover:bg-white/5'}`}
+                        className={`group flex flex-col items-center gap-2 p-2 rounded-2xl transition-all duration-300 border ${selectedId === bank.id ? 'bg-white/10 border-sber-green shadow-[0_0_15px_rgba(33,160,56,0.3)] scale-105' : 'bg-black/40 border-white/5 hover:bg-white/5'}`}
                     >
                         <div className="relative">
                             {bank.logo ? (
@@ -1594,7 +1597,7 @@ const BankSelector = ({
                 <button
                     type="button"
                     onClick={() => onSelect('other')}
-                    className={`flex flex-col items-center gap-2 p-3 rounded-2xl transition-all border ${isCustom ? 'bg-white/10 border-sber-green shadow-lg scale-105' : 'bg-black/20 border-white/5 hover:bg-white/5'}`}
+                    className={`flex flex-col items-center gap-2 p-2 rounded-2xl transition-all border ${isCustom ? 'bg-white/10 border-sber-green shadow-lg scale-105' : 'bg-black/40 border-white/5 hover:bg-white/5'}`}
                 >
                     <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs bg-zinc-800 text-white border border-white/10">
                         <Plus size={16} />
@@ -1603,21 +1606,21 @@ const BankSelector = ({
             </div>
 
             {isCustom && (
-                <div className="bg-black/30 p-4 rounded-2xl border border-white/5 space-y-4 animate-in slide-in-from-top-2">
+                <div className="bg-black/40 p-4 rounded-2xl border border-white/5 space-y-4 animate-in slide-in-from-top-2">
                     <div>
-                        <label className="text-[10px] text-zinc-400 uppercase font-bold mb-2 block tracking-wider">Bank Name</label>
+                        <label className="text-[9px] text-zinc-500 uppercase font-bold mb-2 block tracking-wider">Bank Name</label>
                         <input 
                             type="text" 
                             value={customName} 
                             onChange={e => setCustomName(e.target.value)} 
                             placeholder="My Bank"
-                            className="w-full bg-black/50 p-3 rounded-xl border border-white/10 text-white text-sm focus:border-sber-green focus:ring-1 focus:ring-sber-green outline-none transition-all"
+                            className="w-full bg-black p-3 rounded-xl border border-white/10 text-white text-sm focus:border-sber-green focus:shadow-[0_0_15px_rgba(33,160,56,0.2)] outline-none transition-all"
                         />
                     </div>
                     <div>
-                        <label className="text-[10px] text-zinc-400 uppercase font-bold mb-2 block tracking-wider">Card Color</label>
+                        <label className="text-[9px] text-zinc-500 uppercase font-bold mb-2 block tracking-wider">Card Color</label>
                         <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                            {['#21A038', '#EF3124', '#002882', '#FFDD2D', '#000000', '#BF5AF2', '#FF9500', '#CB11AB', '#D22630'].map(c => (
+                            {['#21A038', '#EF3124', '#002882', '#FFDD2D', '#000000', '#BF5AF2', '#FF9500'].map(c => (
                                 <button
                                     key={c}
                                     type="button"
@@ -1634,7 +1637,7 @@ const BankSelector = ({
     );
 };
 
-// Helper: Smart Calendar Grid (Styled)
+// Helper: Smart Calendar Grid (Modern)
 const SmartCalendar = ({ 
     lastSalaryDate, 
     interval 
@@ -1646,7 +1649,6 @@ const SmartCalendar = ({
     const nextDate = new Date(lastDate);
     nextDate.setDate(lastDate.getDate() + interval);
     
-    // Generate view based on Next Date month
     const year = nextDate.getFullYear();
     const month = nextDate.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -1657,36 +1659,33 @@ const SmartCalendar = ({
     for (let i = 1; i <= daysInMonth; i++) days.push(i);
 
     return (
-      <div className="bg-gradient-to-b from-[#1C1C1E] to-black/80 p-5 rounded-3xl border border-white/10 animate-in fade-in zoom-in duration-500 shadow-xl">
-         <div className="text-center font-bold mb-4 text-white flex justify-between items-center">
-           <span className="text-xs text-purple-400 font-bold uppercase tracking-widest flex items-center gap-1"><Sparkles size={12} /> Forecast</span>
-           <span className="text-sm bg-white/5 px-3 py-1 rounded-full border border-white/5">{nextDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
+      <div className="bg-black/40 p-5 rounded-3xl border border-white/5 animate-in fade-in zoom-in duration-500">
+         <div className="flex justify-between items-center mb-4">
+           <span className="text-[10px] text-purple-400 font-bold uppercase tracking-widest flex items-center gap-1">
+               <Sparkles size={10} /> Prediction
+           </span>
+           <span className="text-xs font-bold text-white bg-white/5 px-3 py-1 rounded-full border border-white/5">
+               {nextDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+           </span>
          </div>
          <div className="grid grid-cols-7 gap-1 text-center mb-2">
-           {['S','M','T','W','T','F','S'].map(d => <div key={d} className="text-[10px] text-zinc-500 font-bold">{d}</div>)}
+           {['S','M','T','W','T','F','S'].map(d => <div key={d} className="text-[9px] text-zinc-600 font-bold">{d}</div>)}
            {days.map((day, idx) => {
              if (!day) return <div key={idx}></div>;
-             
              const isNextPayday = day === nextDate.getDate();
-             
              return (
                <div 
                  key={idx}
-                 className={`text-xs h-8 w-8 mx-auto rounded-full flex items-center justify-center transition-all duration-500 ${
+                 className={`text-[10px] h-7 w-7 mx-auto rounded-full flex items-center justify-center transition-all duration-500 ${
                     isNextPayday 
-                    ? 'bg-gradient-to-tr from-sber-green to-emerald-500 text-white font-bold shadow-[0_0_15px_rgba(33,160,56,0.5)] scale-110' 
-                    : 'text-zinc-400'
+                    ? 'bg-sber-green text-white font-bold shadow-[0_0_10px_rgba(33,160,56,0.6)] scale-110' 
+                    : 'text-zinc-500'
                  }`}
                >
                  {day}
                </div>
              )
            })}
-         </div>
-         <div className="mt-4 text-center bg-sber-green/10 p-3 rounded-xl border border-sber-green/20">
-             <p className="text-xs text-sber-green font-medium">
-                 Expected Deposit: <span className="font-bold text-white">{nextDate.toLocaleDateString()}</span>
-             </p>
          </div>
       </div>
     );
@@ -1699,13 +1698,13 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
   const [isRestoring, setIsRestoring] = useState(false);
   const [keyStatus, setKeyStatus] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
 
-  // Spending Bank State - Default Custom/Open
+  // Spending Bank State
   const [spendingBankId, setSpendingBankId] = useState<string>('other');
   const [customSpendingName, setCustomSpendingName] = useState('Main Account');
   const [customSpendingColor, setCustomSpendingColor] = useState('#1C1C1E');
   const [showSpendingBankEdit, setShowSpendingBankEdit] = useState(true);
 
-  // Savings Bank State - Default Custom/Open
+  // Savings Bank State
   const [savingsBankId, setSavingsBankId] = useState<string>('other');
   const [customSavingsName, setCustomSavingsName] = useState('Savings Pot');
   const [customSavingsColor, setCustomSavingsColor] = useState('#21A038');
@@ -1735,8 +1734,6 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
       setUser(prev => ({ ...prev, apiKey: process.env.API_KEY || '' }));
     }
   }, []);
-
-  // --- Handlers (Logic kept same, UI changes only in Render) ---
 
   const handleGoogleSignIn = async () => {
     if (!auth) { alert("Firebase not configured."); return; }
@@ -1851,64 +1848,85 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
       );
   };
 
+  // Reusable File Upload "Scanner"
+  const ScannerZone = ({ label, file, onChange, icon: Icon, subLabel }: any) => (
+      <div 
+        onClick={onChange}
+        className={`relative h-48 border border-white/10 rounded-[2rem] flex flex-col items-center justify-center cursor-pointer overflow-hidden group transition-all duration-300 ${file ? 'bg-sber-green/5 border-sber-green/30' : 'bg-black/30 hover:bg-white/5'}`}
+      >
+         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5"></div>
+         {/* Scanner Line Animation */}
+         <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-white/50 to-transparent translate-y-[-10px] group-hover:translate-y-[200px] transition-transform duration-[1.5s] ease-linear"></div>
+         
+         <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 transition-all duration-500 ${file ? 'bg-sber-green text-white shadow-[0_0_20px_rgba(33,160,56,0.4)] scale-110' : 'bg-white/5 text-zinc-500 group-hover:scale-105 group-hover:bg-white/10'}`}>
+             {file ? <Check size={32} /> : <Icon size={32} strokeWidth={1.5} />}
+         </div>
+         <p className="text-sm font-bold text-white z-10">{file ? (file.name || "File Uploaded") : label}</p>
+         <p className="text-[10px] text-zinc-500 z-10 mt-1 uppercase tracking-wider">{subLabel}</p>
+      </div>
+  );
+
   // --- Render ---
 
   if (isRestoring) {
       return (
           <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center text-white relative overflow-hidden">
-              <AuroraBackground />
+              <AmbientBackground />
               <div className="relative z-10 flex flex-col items-center">
-                  <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center backdrop-blur-md border border-white/10 mb-6">
-                    <Loader2 className="w-10 h-10 text-sber-green animate-spin" />
+                  <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center backdrop-blur-md border border-white/10 mb-6 relative">
+                    <div className="absolute inset-0 border-2 border-sber-green rounded-full border-t-transparent animate-spin"></div>
+                    <Loader2 className="w-10 h-10 text-sber-green animate-pulse" />
                   </div>
-                  <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">Restoring your data...</h2>
+                  <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">Restoring Neural Data...</h2>
               </div>
           </div>
       );
   }
 
   return (
-    // CHANGE: Increased padding top (pt-24) to avoid overlap with dots
-    <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center px-6 pt-24 pb-6 text-center text-white relative overflow-hidden font-sans">
-        <AuroraBackground />
+    <div className="min-h-[100dvh] bg-[#050505] flex flex-col items-center justify-start sm:justify-center px-6 pt-28 pb-20 text-center text-white relative overflow-y-auto overflow-x-hidden font-sans">
+        <AmbientBackground />
         
-        {/* Step Indicator (Floating) */}
+        {/* Step Indicator (Floating HUD) */}
         {step > 0 && (
-            <div className="absolute top-8 left-1/2 -translate-x-1/2 flex gap-1.5 p-2 bg-black/40 backdrop-blur-md rounded-full border border-white/10 z-20">
-            {[1,2,3,4,5,6,7].map(s => (
-                <div 
-                    key={s} 
-                    className={`h-2 rounded-full transition-all duration-500 ${
-                        s === step ? 'w-8 bg-sber-green shadow-[0_0_10px_rgba(33,160,56,0.5)]' : 
-                        s < step ? 'w-2 bg-white/50' : 'w-2 bg-white/10'
-                    }`} 
-                />
-            ))}
+            <div className="fixed top-8 left-1/2 -translate-x-1/2 flex gap-1 p-1.5 bg-black/60 backdrop-blur-xl rounded-full border border-white/10 z-50 shadow-2xl">
+                {[1,2,3,4,5,6,7].map(s => (
+                    <div 
+                        key={s} 
+                        className={`h-1.5 rounded-full transition-all duration-500 ${
+                            s === step ? 'w-8 bg-sber-green shadow-[0_0_10px_rgba(33,160,56,0.5)]' : 
+                            s < step ? 'w-2 bg-white/40' : 'w-2 bg-white/10'
+                        }`} 
+                    />
+                ))}
             </div>
         )}
 
         {/* Step 0: Welcome Screen */}
         {step === 0 && (
-          <GlassCard className="w-full max-w-sm animate-in fade-in zoom-in duration-700">
-            {/* UPDATED: Using app.png directly instead of generic Wallet icon */}
-            <div className="relative w-28 h-28 mx-auto mb-8">
-               <div className="absolute inset-0 bg-sber-green/20 blur-2xl rounded-full animate-pulse"></div>
+          <GlassCard className="w-full max-w-sm animate-in fade-in zoom-in duration-700 my-auto">
+            <div className="relative w-32 h-32 mx-auto mb-8 group">
+               <div className="absolute inset-0 bg-sber-green/20 blur-[50px] rounded-full animate-pulse-slow"></div>
                <img 
                  src="/app.png" 
                  alt="Masareefy" 
-                 className="relative z-10 w-full h-full object-contain drop-shadow-2xl hover:scale-105 transition-transform duration-500 rounded-[2rem]"
+                 className="relative z-10 w-full h-full object-contain drop-shadow-2xl group-hover:scale-105 transition-transform duration-500 rounded-[2.5rem]"
                />
             </div>
             
-            <h1 className="text-4xl font-bold mb-3 tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-white to-gray-400">{t.welcome}</h1>
-            <p className="text-zinc-400 mb-10 text-base font-light">{t.setup_title}</p>
+            <h1 className="text-4xl font-black mb-3 tracking-tighter text-white">
+                Masareefy<span className="text-sber-green">.AI</span>
+            </h1>
+            <p className="text-zinc-400 mb-10 text-sm font-medium leading-relaxed max-w-[80%] mx-auto">
+                Next-gen financial operating system powered by Neural Titan Engine.
+            </p>
             
-            <button onClick={handleGoogleSignIn} className="w-full bg-white text-black font-bold p-4 rounded-2xl flex items-center justify-center gap-3 hover:bg-gray-200 transition-all active:scale-95 mb-4 shadow-lg group">
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            <button onClick={handleGoogleSignIn} className="w-full bg-white text-black font-bold p-4 rounded-2xl flex items-center justify-center gap-3 hover:bg-gray-200 transition-all active:scale-95 mb-3 shadow-[0_0_20px_rgba(255,255,255,0.2)]">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
                 {t.sign_in_google}
             </button>
-            <button onClick={() => { setUser(u => ({...u, isGuest: false, name: ''})); setStep(1); }} className="w-full bg-white/5 hover:bg-white/10 text-white font-bold p-4 rounded-2xl flex items-center justify-center gap-3 border border-white/10 transition-all active:scale-95 backdrop-blur-md">
-                <UserCircle2 className="w-5 h-5 text-zinc-400" />
+            <button onClick={() => { setUser(u => ({...u, isGuest: false, name: ''})); setStep(1); }} className="w-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white font-bold p-4 rounded-2xl flex items-center justify-center gap-3 border border-white/5 transition-all active:scale-95">
+                <UserCircle2 className="w-5 h-5" />
                 {t.guest_mode}
             </button>
           </GlassCard>
@@ -1919,42 +1937,48 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
           <GlassCard className="w-full max-w-sm animate-in slide-in-from-right duration-500">
              <div className="text-left mb-8">
                  <h2 className="text-3xl font-bold mb-2 text-white">{t.enter_name}</h2>
-                 <p className="text-zinc-400 text-sm">Let's personalize your experience.</p>
+                 <p className="text-zinc-500 text-xs font-mono uppercase tracking-widest">Identify yourself to the system.</p>
              </div>
              
              <form onSubmit={handleProfileSubmit} className="space-y-6">
               <div className="text-left group">
-                  <label className="text-xs text-zinc-500 ml-1 mb-2 block uppercase font-bold tracking-widest group-focus-within:text-sber-green transition-colors">{t.enter_name}</label>
-                  <input type="text" className="w-full bg-black/50 p-4 rounded-2xl border border-white/10 focus:border-sber-green focus:ring-1 focus:ring-sber-green outline-none text-white transition-all placeholder-zinc-700" placeholder="John Doe" value={user.name} onChange={e => setUser({...user, name: e.target.value})} required autoFocus />
+                  <label className="text-[10px] text-zinc-500 ml-1 mb-2 block uppercase font-bold tracking-[0.2em] group-focus-within:text-sber-green transition-colors">{t.enter_name}</label>
+                  <input type="text" className="w-full bg-black/50 p-4 rounded-2xl border border-white/10 focus:border-sber-green focus:shadow-[0_0_20px_rgba(33,160,56,0.2)] outline-none text-white transition-all placeholder-zinc-800 font-medium" placeholder="Ex: John Doe" value={user.name} onChange={e => setUser({...user, name: e.target.value})} required autoFocus />
               </div>
 
               <div className="text-left group">
-                <label className="text-xs text-zinc-500 ml-1 mb-2 block uppercase font-bold tracking-widest group-focus-within:text-sber-green transition-colors">{t.enter_key}</label>
+                <label className="text-[10px] text-zinc-500 ml-1 mb-2 block uppercase font-bold tracking-[0.2em] group-focus-within:text-sber-green transition-colors">{t.enter_key}</label>
                 <div className="relative">
-                    <input type="password" className={`w-full bg-black/50 p-4 pr-14 rounded-2xl border outline-none text-white transition-all placeholder-zinc-700 ${keyStatus === 'valid' ? 'border-sber-green ring-1 ring-sber-green' : keyStatus === 'invalid' ? 'border-red-500' : 'border-white/10 focus:border-sber-green'}`} placeholder="AI Studio Key" value={user.apiKey} onChange={e => { setUser({...user, apiKey: e.target.value}); setKeyStatus('idle'); }} required />
+                    <input type="password" className={`w-full bg-black/50 p-4 pr-14 rounded-2xl border outline-none text-white transition-all placeholder-zinc-800 font-mono ${keyStatus === 'valid' ? 'border-sber-green shadow-[0_0_20px_rgba(33,160,56,0.2)]' : keyStatus === 'invalid' ? 'border-red-500' : 'border-white/10 focus:border-sber-green'}`} placeholder="AI Studio Key" value={user.apiKey} onChange={e => { setUser({...user, apiKey: e.target.value}); setKeyStatus('idle'); }} required />
                     <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                        <button type="button" onClick={checkApiKey} disabled={!user.apiKey} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${keyStatus === 'valid' ? 'bg-sber-green text-white shadow-[0_0_15px_rgba(33,160,56,0.5)]' : 'bg-white/5 text-zinc-400 hover:text-white'}`}>
-                            {keyStatus === 'valid' ? <CheckCircle2 size={20} /> : <Key size={20} />}
+                        <button type="button" onClick={checkApiKey} disabled={!user.apiKey} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${keyStatus === 'valid' ? 'bg-sber-green text-white shadow-lg' : 'bg-white/5 text-zinc-400 hover:text-white'}`}>
+                            {keyStatus === 'valid' ? <CheckCircle2 size={18} /> : <Key size={18} />}
                         </button>
                     </div>
                 </div>
               </div>
               
-              <div className="flex gap-4">
-                 <select className="flex-1 bg-black/50 p-4 rounded-2xl border border-white/10 text-white outline-none focus:border-sber-green appearance-none" value={user.currency} onChange={e => setUser({...user, currency: e.target.value as Currency})}>
-                    <option value="USD">USD ($)</option>
-                    <option value="SAR">SAR (﷼)</option>
-                    <option value="AED">AED (د.إ)</option>
-                    <option value="RUB">RUB (₽)</option>
-                 </select>
-                 <select className="flex-1 bg-black/50 p-4 rounded-2xl border border-white/10 text-white outline-none focus:border-sber-green appearance-none" value={user.language} onChange={e => setUser({...user, language: e.target.value as Language})}>
-                    <option value="en">English</option>
-                    <option value="ar">العربية</option>
-                    <option value="ru">Русский</option>
-                 </select>
+              <div className="flex gap-3">
+                 <div className="flex-1 relative">
+                     <div className="absolute top-2 left-3 text-[8px] text-zinc-500 font-bold uppercase">Currency</div>
+                     <select className="w-full bg-black/50 pt-6 pb-2 px-3 rounded-2xl border border-white/10 text-white outline-none focus:border-sber-green appearance-none text-sm font-bold" value={user.currency} onChange={e => setUser({...user, currency: e.target.value as Currency})}>
+                        <option value="USD">USD ($)</option>
+                        <option value="SAR">SAR (﷼)</option>
+                        <option value="AED">AED (د.إ)</option>
+                        <option value="RUB">RUB (₽)</option>
+                     </select>
+                 </div>
+                 <div className="flex-1 relative">
+                     <div className="absolute top-2 left-3 text-[8px] text-zinc-500 font-bold uppercase">Language</div>
+                     <select className="w-full bg-black/50 pt-6 pb-2 px-3 rounded-2xl border border-white/10 text-white outline-none focus:border-sber-green appearance-none text-sm font-bold" value={user.language} onChange={e => setUser({...user, language: e.target.value as Language})}>
+                        <option value="en">English</option>
+                        <option value="ar">العربية</option>
+                        <option value="ru">Русский</option>
+                     </select>
+                 </div>
               </div>
 
-              <button type="submit" className="w-full bg-gradient-to-r from-sber-green to-emerald-600 hover:to-emerald-500 font-bold p-4 rounded-2xl mt-4 flex justify-center gap-2 items-center shadow-lg shadow-emerald-900/50 transition-all active:scale-95" disabled={isValidating}>
+              <button type="submit" className="w-full bg-white text-black font-bold p-4 rounded-2xl mt-4 flex justify-center gap-2 items-center shadow-[0_0_30px_rgba(255,255,255,0.2)] hover:bg-gray-200 transition-all active:scale-95" disabled={isValidating}>
                 {isValidating ? <Loader2 className="animate-spin" /> : <>{t.start} <ArrowRight size={20} /></>}
               </button>
              </form>
@@ -1965,18 +1989,18 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
         {step === 2 && (
           <GlassCard className="w-full max-w-sm animate-in slide-in-from-right duration-500">
             <h2 className="text-2xl font-bold mb-2 text-white">{t.step_balance}</h2>
-            <p className="text-zinc-400 mb-8 text-sm">{t.step_balance_desc}</p>
-            <div 
-                className={`h-64 border-2 border-dashed rounded-[2rem] flex flex-col items-center justify-center cursor-pointer transition-all duration-300 group ${balanceFile ? 'border-sber-green bg-sber-green/10' : 'border-white/10 hover:border-white/30 hover:bg-white/5'}`} 
-                onClick={() => document.getElementById('balanceInput')?.click()}
-            >
-              <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-all ${balanceFile ? 'bg-sber-green text-white shadow-[0_0_20px_rgba(33,160,56,0.4)]' : 'bg-white/5 text-zinc-500 group-hover:scale-110'}`}>
-                 {balanceFile ? <Check size={32} /> : <ImageIcon size={32} />}
-              </div>
-              <span className="text-sm font-medium text-zinc-400 group-hover:text-white transition-colors">{balanceFile ? balanceFile.name : t.upload_image}</span>
-              <input id="balanceInput" type="file" accept="image/*" className="hidden" onChange={(e) => setBalanceFile(e.target.files?.[0] || null)} />
-            </div>
-            <button onClick={() => setStep(3)} className="w-full bg-white text-black p-4 rounded-2xl mt-8 font-bold shadow-lg shadow-white/10 hover:bg-gray-200 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100" disabled={!balanceFile}>Next Step</button>
+            <p className="text-zinc-500 mb-8 text-xs font-mono uppercase tracking-wide">Data Source: Banking App Screenshot</p>
+            
+            <ScannerZone 
+                label={t.upload_image} 
+                subLabel="Current Balance"
+                file={balanceFile} 
+                onChange={() => document.getElementById('balanceInput')?.click()} 
+                icon={Smartphone}
+            />
+            <input id="balanceInput" type="file" accept="image/*" className="hidden" onChange={(e) => setBalanceFile(e.target.files?.[0] || null)} />
+            
+            <button onClick={() => setStep(3)} className="w-full bg-white text-black p-4 rounded-2xl mt-8 font-bold shadow-lg disabled:opacity-50 disabled:active:scale-100 transition-all hover:scale-[1.02]" disabled={!balanceFile}>Confirm Data</button>
           </GlassCard>
         )}
 
@@ -1984,18 +2008,18 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
         {step === 3 && (
           <GlassCard className="w-full max-w-sm animate-in slide-in-from-right duration-500">
             <h2 className="text-2xl font-bold mb-2 text-white">{t.step_salary}</h2>
-            <p className="text-zinc-400 mb-8 text-sm">Upload last salary slip to detect date.</p>
-            <div 
-                className={`h-64 border-2 border-dashed rounded-[2rem] flex flex-col items-center justify-center cursor-pointer transition-all duration-300 group ${salaryFile ? 'border-sber-green bg-sber-green/10' : 'border-white/10 hover:border-white/30 hover:bg-white/5'}`} 
-                onClick={() => document.getElementById('salaryInput')?.click()}
-            >
-              <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-all ${salaryFile ? 'bg-sber-green text-white shadow-[0_0_20px_rgba(33,160,56,0.4)]' : 'bg-white/5 text-zinc-500 group-hover:scale-110'}`}>
-                 {salaryFile ? <Check size={32} /> : <DollarSign size={32} />}
-              </div>
-              <span className="text-sm font-medium text-zinc-400 group-hover:text-white transition-colors">{salaryFile ? salaryFile.name : t.upload_image}</span>
-              <input id="salaryInput" type="file" accept="image/*" className="hidden" onChange={(e) => setSalaryFile(e.target.files?.[0] || null)} />
-            </div>
-            <button onClick={() => setStep(4)} className="w-full bg-white text-black p-4 rounded-2xl mt-8 font-bold shadow-lg shadow-white/10 hover:bg-gray-200 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100" disabled={!salaryFile}>Next Step</button>
+            <p className="text-zinc-500 mb-8 text-xs font-mono uppercase tracking-wide">Data Source: Payslip / SMS</p>
+            
+            <ScannerZone 
+                label={t.upload_image} 
+                subLabel="Last Salary Notification"
+                file={salaryFile} 
+                onChange={() => document.getElementById('salaryInput')?.click()} 
+                icon={CreditCard}
+            />
+            <input id="salaryInput" type="file" accept="image/*" className="hidden" onChange={(e) => setSalaryFile(e.target.files?.[0] || null)} />
+            
+            <button onClick={() => setStep(4)} className="w-full bg-white text-black p-4 rounded-2xl mt-8 font-bold shadow-lg disabled:opacity-50 disabled:active:scale-100 transition-all hover:scale-[1.02]" disabled={!salaryFile}>Confirm Data</button>
           </GlassCard>
         )}
 
@@ -2003,18 +2027,22 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
         {step === 4 && (
           <GlassCard className="w-full max-w-sm animate-in slide-in-from-right duration-500">
             <h2 className="text-2xl font-bold mb-2 text-white">{t.step_expenses}</h2>
-            <p className="text-zinc-400 mb-8 text-sm">Upload multiple receipts to learn habits.</p>
+            <p className="text-zinc-500 mb-8 text-xs font-mono uppercase tracking-wide">Upload multiple to train AI.</p>
+            
             <div 
-                className={`h-64 border-2 border-dashed rounded-[2rem] flex flex-col items-center justify-center cursor-pointer transition-all duration-300 group ${expenseFiles.length ? 'border-sber-green bg-sber-green/10' : 'border-white/10 hover:border-white/30 hover:bg-white/5'}`} 
                 onClick={() => document.getElementById('expensesInput')?.click()}
+                className={`relative h-56 border border-white/10 rounded-[2rem] flex flex-col items-center justify-center cursor-pointer overflow-hidden group transition-all duration-300 ${expenseFiles.length ? 'bg-sber-green/5 border-sber-green/30' : 'bg-black/30 hover:bg-white/5'}`}
             >
-               <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-all ${expenseFiles.length ? 'bg-sber-green text-white shadow-[0_0_20px_rgba(33,160,56,0.4)]' : 'bg-white/5 text-zinc-500 group-hover:scale-110'}`}>
-                 {expenseFiles.length ? <span className="font-bold text-lg">{expenseFiles.length}</span> : <Upload size={32} />}
+               <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-white/50 to-transparent translate-y-[-10px] group-hover:translate-y-[220px] transition-transform duration-[2s] ease-linear"></div>
+               
+               <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mb-4 transition-all duration-500 ${expenseFiles.length ? 'bg-sber-green text-white shadow-[0_0_30px_rgba(33,160,56,0.4)] scale-110' : 'bg-white/5 text-zinc-500 group-hover:bg-white/10'}`}>
+                 {expenseFiles.length ? <span className="font-bold text-2xl">{expenseFiles.length}</span> : <ScanLine size={32} strokeWidth={1.5} />}
                </div>
-               <span className="text-sm font-medium text-zinc-400 group-hover:text-white transition-colors">{expenseFiles.length ? 'Files Selected' : 'Upload Receipts'}</span>
+               <span className="text-sm font-bold text-white z-10">{expenseFiles.length ? 'Receipts Scanned' : 'Bulk Scan'}</span>
                <input id="expensesInput" type="file" accept="image/*" multiple className="hidden" onChange={(e) => setExpenseFiles(Array.from(e.target.files || []))} />
             </div>
-            <button onClick={() => setStep(5)} className="w-full bg-white text-black p-4 rounded-2xl mt-8 font-bold shadow-lg shadow-white/10 hover:bg-gray-200 transition-all active:scale-95">Next Step</button>
+            
+            <button onClick={() => setStep(5)} className="w-full bg-white text-black p-4 rounded-2xl mt-8 font-bold shadow-lg transition-all hover:scale-[1.02]">Proceed</button>
           </GlassCard>
         )}
 
@@ -2022,66 +2050,82 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
         {step === 5 && (
           <GlassCard className="w-full max-w-sm animate-in slide-in-from-right duration-500">
              <h2 className="text-2xl font-bold mb-2 text-white">{t.step_recurring}</h2>
-             <p className="text-zinc-400 mb-6 text-sm">Rent, Internet, Netflix, etc.</p>
+             <p className="text-zinc-500 mb-6 text-xs font-mono uppercase tracking-wide">Manual Entry: Fixed Obligations</p>
              
-             <div className="bg-black/30 p-4 rounded-2xl border border-white/5 mb-6 space-y-3">
-                <input type="text" placeholder={t.bill_name} value={newBillName} onChange={e => setNewBillName(e.target.value)} className="w-full bg-black/50 p-3 rounded-xl border border-white/10 outline-none text-sm text-white focus:border-sber-green" />
+             <div className="bg-black/40 p-4 rounded-[1.5rem] border border-white/5 mb-6 space-y-3">
+                <input type="text" placeholder={t.bill_name} value={newBillName} onChange={e => setNewBillName(e.target.value)} className="w-full bg-black/50 p-3 rounded-xl border border-white/10 outline-none text-sm text-white focus:border-sber-green placeholder-zinc-700" />
                 <div className="flex gap-2">
-                   <input type="number" placeholder={t.bill_amount} value={newBillAmount} onChange={e => setNewBillAmount(e.target.value)} className="w-full bg-black/50 p-3 rounded-xl border border-white/10 outline-none text-sm text-white focus:border-sber-green" />
-                   <button onClick={() => { if(newBillName && newBillAmount) { setRecurringBills([...recurringBills, { id: Date.now().toString(), name: newBillName, amount: Number(newBillAmount) }]); setNewBillName(''); setNewBillAmount(''); } }} className="bg-sber-green p-3 rounded-xl text-white hover:bg-green-600 transition-colors"><Plus /></button>
+                   <div className="relative flex-1">
+                     <input type="number" placeholder={t.bill_amount} value={newBillAmount} onChange={e => setNewBillAmount(e.target.value)} className="w-full bg-black/50 p-3 rounded-xl border border-white/10 outline-none text-sm text-white focus:border-sber-green placeholder-zinc-700" />
+                   </div>
+                   <button onClick={() => { if(newBillName && newBillAmount) { setRecurringBills([...recurringBills, { id: Date.now().toString(), name: newBillName, amount: Number(newBillAmount) }]); setNewBillName(''); setNewBillAmount(''); } }} className="bg-white text-black p-3 rounded-xl hover:bg-gray-200 transition-colors"><Plus /></button>
                 </div>
+                
+                {/* Bills List */}
                 {recurringBills.length > 0 && (
                     <div className="space-y-2 pt-2 max-h-32 overflow-y-auto custom-scrollbar">
                         {recurringBills.map(b => (
-                            <div key={b.id} className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/5">
-                                <span className="text-sm font-medium">{b.name}</span> 
-                                <span className="text-xs font-bold text-zinc-400">{b.amount}</span>
+                            <div key={b.id} className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/5 animate-in slide-in-from-left">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
+                                    <span className="text-xs font-medium">{b.name}</span>
+                                </div>
+                                <span className="text-xs font-bold text-white font-mono">{b.amount}</span>
                             </div>
                         ))}
                     </div>
                 )}
              </div>
-             <button onClick={handleStartAnalysis} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:to-indigo-500 text-white p-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-purple-900/40 transition-all active:scale-95">
-                 Analyze All <Zap size={18} className="fill-current" />
+             <button onClick={handleStartAnalysis} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(147,51,234,0.3)] hover:shadow-[0_0_50px_rgba(147,51,234,0.5)] transition-all active:scale-95">
+                 Initialize Neural Engine <Zap size={18} className="fill-white" />
              </button>
           </GlassCard>
         )}
 
-        {/* Step 6: Loading */}
+        {/* Step 6: Loading (Matrix Effect) */}
         {step === 6 && (
-           <div className="flex flex-col items-center justify-center animate-in fade-in duration-700">
-              <div className="relative">
-                  <div className="absolute inset-0 bg-sber-green/20 blur-xl rounded-full"></div>
-                  <Loader2 className="w-20 h-20 text-sber-green animate-spin relative z-10" />
+           <div className="flex flex-col items-center justify-center animate-in fade-in duration-700 my-auto">
+              <div className="relative w-32 h-32 mb-8">
+                  <div className="absolute inset-0 border-4 border-purple-500/20 rounded-full animate-spin-slow"></div>
+                  <div className="absolute inset-4 border-4 border-t-purple-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                      <Sparkles className="w-10 h-10 text-purple-400 animate-pulse" />
+                  </div>
               </div>
-              <h2 className="text-2xl font-bold mt-8 text-white">{t.analyzing_all}</h2>
-              <p className="text-zinc-400 mt-2 text-sm">AI is building your profile...</p>
+              <h2 className="text-2xl font-bold text-white tracking-wide">{t.analyzing_all}</h2>
+              <div className="mt-4 flex flex-col gap-2 items-center">
+                  <span className="text-xs text-purple-400 font-mono animate-pulse">OCR SCANNING...</span>
+                  <span className="text-xs text-indigo-400 font-mono animate-pulse" style={{ animationDelay: '0.5s' }}>PATTERN RECOGNITION...</span>
+                  <span className="text-xs text-sber-green font-mono animate-pulse" style={{ animationDelay: '1s' }}>BUILDING PROFILE...</span>
+              </div>
            </div>
         )}
 
         {/* Step 7: Final Review */}
         {step === 7 && analysisResult && (
-           <div className="w-full max-w-sm animate-in slide-in-from-bottom duration-700 pb-10">
-              <h2 className="text-3xl font-bold mb-2 text-white">{t.step_review}</h2>
-              <p className="text-zinc-400 mb-8 text-sm">Configure your smart wallets.</p>
+           <div className="w-full max-w-sm animate-in slide-in-from-bottom duration-700 pb-24 relative z-10">
+              <h2 className="text-3xl font-bold mb-2 text-white">System Ready</h2>
+              <p className="text-zinc-500 mb-8 text-xs font-mono uppercase">Verify Configuration</p>
               
               <div className="space-y-4">
                  {/* 1. Spending Wallet Config */}
-                 <div className="bg-[#1C1C1E] p-5 rounded-[2rem] border border-white/10 space-y-4 shadow-xl">
+                 <div className="bg-[#121212] p-5 rounded-[2rem] border border-white/10 space-y-4 shadow-xl relative overflow-hidden z-10">
+                    <div className="absolute top-0 right-0 p-4 opacity-5"><Wallet size={64} /></div>
                     <div className="flex justify-between items-center border-b border-white/5 pb-3">
                         <div className="flex items-center gap-2 text-zinc-300">
-                            <Wallet size={18} /> <span className="text-xs font-bold uppercase tracking-wider">Spending</span>
+                            <Wallet size={16} /> <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Spending</span>
                         </div>
-                        <span className="font-mono font-bold text-white text-xl">{analysisResult.currentBalance.toLocaleString()}</span>
+                        <span className="font-mono font-bold text-white text-lg">{analysisResult.currentBalance.toLocaleString()}</span>
                     </div>
 
                     <div className="pt-1">
                         <button 
                             onClick={() => setShowSpendingBankEdit(!showSpendingBankEdit)}
-                            className="w-full flex justify-between items-center bg-black/30 p-3 rounded-xl border border-white/5 hover:bg-white/5 transition-all group"
+                            className="w-full flex justify-between items-center bg-black/40 p-3 rounded-xl border border-white/5 hover:bg-white/5 transition-all group"
                         >
-                            <span className="text-xs text-zinc-400 group-hover:text-white transition-colors">Bank Account</span>
+                            <span className="text-xs text-zinc-400 group-hover:text-white transition-colors">Bank Integration</span>
                             <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: customSpendingColor }}></div>
                                 <span className="text-xs font-bold text-white">{spendingBankId === 'other' ? customSpendingName || 'Custom' : RUSSIAN_BANKS.find(b => b.id === spendingBankId)?.name}</span>
                                 <ChevronDown size={14} className={`text-zinc-500 transition-transform ${showSpendingBankEdit ? 'rotate-180' : ''}`} />
                             </div>
@@ -2103,16 +2147,17 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
                  </div>
                  
                  {/* 2. Savings Wallet Config */}
-                 <div className="bg-[#1C1C1E] p-5 rounded-[2rem] border border-white/10 space-y-4 shadow-xl">
+                 <div className="bg-[#121212] p-5 rounded-[2rem] border border-white/10 space-y-4 shadow-xl relative overflow-hidden z-10">
+                    <div className="absolute top-0 right-0 p-4 opacity-5 text-sber-green"><PiggyBank size={64} /></div>
                     <div className="flex justify-between items-center mb-1">
                         <div className="flex items-center gap-2 text-sber-green">
-                            <PiggyBank size={18} /> <span className="text-xs font-bold uppercase tracking-wider">Savings Pot</span>
+                            <PiggyBank size={16} /> <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Savings Pot</span>
                         </div>
                         <input 
                             type="number" 
                             value={savingsInitial} 
                             onChange={e => setSavingsInitial(Number(e.target.value))}
-                            className="bg-black/50 text-white w-28 text-right p-2 rounded-xl text-lg font-bold border border-white/10 outline-none focus:border-sber-green transition-all"
+                            className="bg-black/50 text-white w-28 text-right p-2 rounded-xl text-lg font-bold border border-white/10 outline-none focus:border-sber-green transition-all font-mono"
                             placeholder="0.00"
                         />
                     </div>
@@ -2120,10 +2165,11 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
                     <div className="pt-2">
                             <button 
                                 onClick={() => setShowSavingsBankEdit(!showSavingsBankEdit)}
-                                className="w-full flex justify-between items-center bg-black/30 p-3 rounded-xl border border-white/5 hover:bg-white/5 transition-all group"
+                                className="w-full flex justify-between items-center bg-black/40 p-3 rounded-xl border border-white/5 hover:bg-white/5 transition-all group"
                             >
-                                <span className="text-xs text-zinc-400 group-hover:text-white transition-colors">Bank Account</span>
+                                <span className="text-xs text-zinc-400 group-hover:text-white transition-colors">Bank Integration</span>
                                 <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: customSavingsColor }}></div>
                                     <span className="text-xs font-bold text-white">{savingsBankId === 'other' ? customSavingsName || 'Custom' : RUSSIAN_BANKS.find(b => b.id === savingsBankId)?.name}</span>
                                     <ChevronDown size={14} className={`text-zinc-500 transition-transform ${showSavingsBankEdit ? 'rotate-180' : ''}`} />
                                 </div>
@@ -2145,33 +2191,33 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
                  </div>
 
                  {/* 3. Salary Cycle */}
-                 <div className="bg-[#1C1C1E] p-5 rounded-[2rem] border border-white/10 shadow-xl">
+                 <div className="bg-[#121212] p-5 rounded-[2rem] border border-white/10 shadow-xl relative z-10">
                     <div className="flex items-center gap-2 mb-4">
-                        <CalendarClock className="text-purple-400 w-5 h-5" />
-                        <span className="text-sm font-bold text-white uppercase tracking-wider">Salary Cycle</span>
+                        <CalendarClock className="text-purple-400 w-4 h-4" />
+                        <span className="text-[10px] font-bold text-white uppercase tracking-[0.2em]">Salary Cycle</span>
                     </div>
                     
-                    <div className="mb-4 flex items-center justify-between bg-black/30 p-3 rounded-xl border border-white/5">
-                        <p className="text-xs text-zinc-400">Last detected salary:</p>
-                        <p className="text-white font-mono font-bold">
+                    <div className="mb-4 flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5">
+                        <p className="text-[10px] text-zinc-400 font-bold uppercase">Last Detected</p>
+                        <p className="text-white font-mono font-bold text-sm">
                             {analysisResult.lastSalary.date}
                         </p>
                     </div>
 
                     <div className="mb-6">
-                        <label className="text-xs text-zinc-500 uppercase font-bold mb-2 block tracking-wider">Pay Interval (Days)</label>
+                        <label className="text-[9px] text-zinc-500 uppercase font-bold mb-2 block tracking-wider">Interval (Days)</label>
                         <input 
                             type="number" 
                             value={salaryInterval} 
                             onChange={e => setSalaryInterval(Number(e.target.value))}
-                            className="w-full bg-black/50 text-white p-3 rounded-xl border border-white/10 text-center font-bold text-lg outline-none focus:border-purple-500 transition-all"
+                            className="w-full bg-black/50 text-white p-3 rounded-xl border border-white/10 text-center font-bold text-lg outline-none focus:border-purple-500 transition-all font-mono"
                         />
                     </div>
 
                     <SmartCalendar lastSalaryDate={analysisResult.lastSalary.date} interval={salaryInterval} />
                  </div>
 
-                 <button onClick={handleFinalize} className="w-full bg-white text-black p-4 rounded-2xl mt-4 font-bold shadow-[0_0_30px_rgba(255,255,255,0.2)] hover:bg-gray-200 transition-all active:scale-95 text-lg">
+                 <button onClick={handleFinalize} className="w-full bg-white text-black p-4 rounded-2xl mt-4 font-bold shadow-[0_0_30px_rgba(255,255,255,0.3)] hover:bg-gray-200 transition-all active:scale-95 text-sm uppercase tracking-widest relative z-10">
                     {t.confirm_setup}
                  </button>
               </div>
@@ -2401,18 +2447,12 @@ import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, Tooltip, CartesianGrid } from 'recharts';
 import { Transaction, Language } from '../types';
 import { CATEGORIES, TRANSLATIONS } from '../constants';
-import { TrendingUp, DollarSign, PieChart as PieIcon, TrendingDown, Layers, Calculator } from 'lucide-react';
+import { TrendingUp, DollarSign, PieChart as PieIcon, TrendingDown, Calculator, Activity, Calendar } from 'lucide-react';
 
 interface Props {
   transactions: Transaction[];
   language: Language;
 }
-
-const GlassCard = ({ children, className = '' }: { children: React.ReactNode, className?: string }) => (
-    <div className={`bg-[#121214]/80 backdrop-blur-xl border border-white/5 rounded-[2rem] p-6 shadow-xl ${className}`}>
-        {children}
-    </div>
-);
 
 export const Reports: React.FC<Props> = ({ transactions, language }) => {
   const t = TRANSLATIONS[language];
@@ -2448,7 +2488,6 @@ export const Reports: React.FC<Props> = ({ transactions, language }) => {
   }).reverse();
 
   const barData = last7Days.map(dateStr => {
-    // Ensure accurate date matching
     const dayTotal = expenses
       .filter(t => t.date === dateStr) 
       .reduce((sum, t) => sum + Number(t.amount), 0);
@@ -2461,21 +2500,18 @@ export const Reports: React.FC<Props> = ({ transactions, language }) => {
     };
   });
 
-  // Find Max and Min for coloring
   const maxAmount = Math.max(...barData.map(d => d.amount));
   const minAmount = Math.min(...barData.filter(d => d.amount > 0).map(d => d.amount)) || 0;
   const averageDaily = totalExpenses / (barData.filter(d => d.amount > 0).length || 1);
-
   const hasData = expenses.length > 0;
-  const topCategory = pieData.length > 0 ? pieData[0] : null;
 
   // Custom Tooltip for Charts
   const CustomTooltip = ({ active, payload, label }: any) => {
       if (active && payload && payload.length) {
           return (
-              <div className="bg-black/90 border border-white/10 p-3 rounded-xl shadow-2xl backdrop-blur-md">
-                  <p className="text-xs text-zinc-400 font-bold mb-1">{label}</p>
-                  <p className="text-white font-bold text-sm">
+              <div className="glass-strong border border-white/10 p-3 rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+                  <p className="text-[10px] text-zinc-400 font-bold mb-1 uppercase tracking-wider">{label}</p>
+                  <p className="text-white font-bold text-lg font-mono">
                       {Number(payload[0].value).toLocaleString()}
                   </p>
               </div>
@@ -2488,7 +2524,7 @@ export const Reports: React.FC<Props> = ({ transactions, language }) => {
     <div className="space-y-6 pb-32">
       
       {/* Header */}
-      <div className="flex items-center gap-3 px-2 mb-2 pt-4">
+      <div className="flex items-center gap-3 px-2 mb-2 pt-4 animate-slide-down">
          <div className="bg-sber-green/10 p-3 rounded-2xl border border-sber-green/20 shadow-[0_0_15px_rgba(33,160,56,0.2)]">
              <PieIcon className="w-6 h-6 text-sber-green" />
          </div>
@@ -2500,144 +2536,170 @@ export const Reports: React.FC<Props> = ({ transactions, language }) => {
             {/* 1. Hero Stats Row */}
             <div className="grid grid-cols-2 gap-3 px-1">
                 {/* Total Spent */}
-                <GlassCard className="relative overflow-hidden group">
+                <div className="glass-panel p-5 rounded-[2rem] relative overflow-hidden group animate-scale-in" style={{ animationDelay: '0.1s' }}>
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
                         <TrendingDown size={48} />
                     </div>
-                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Total Spent</p>
-                    <h3 className="text-2xl font-bold text-white tabular-nums tracking-tight">
+                    <div className="absolute -bottom-4 -left-4 w-20 h-20 bg-red-500/20 blur-2xl rounded-full"></div>
+                    
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                        <Activity size={10} /> Total Spent
+                    </p>
+                    <h3 className="text-2xl font-bold text-white tabular-nums tracking-tight drop-shadow-md">
                         {totalExpenses.toLocaleString()}
                     </h3>
-                    <div className="mt-2 text-[10px] text-zinc-500 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span> Expense
+                    <div className="mt-2 text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-1 rounded-lg w-fit">
+                        Expense
                     </div>
-                </GlassCard>
+                </div>
 
                 {/* Daily Average */}
-                <GlassCard className="relative overflow-hidden group">
+                <div className="glass-panel p-5 rounded-[2rem] relative overflow-hidden group animate-scale-in" style={{ animationDelay: '0.2s' }}>
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
                         <Calculator size={48} />
                     </div>
-                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Daily Avg</p>
-                    <h3 className="text-2xl font-bold text-white tabular-nums tracking-tight">
+                    <div className="absolute -bottom-4 -right-4 w-20 h-20 bg-blue-500/20 blur-2xl rounded-full"></div>
+
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                        <Calendar size={10} /> Daily Avg
+                    </p>
+                    <h3 className="text-2xl font-bold text-white tabular-nums tracking-tight drop-shadow-md">
                         {averageDaily.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </h3>
-                    <div className="mt-2 text-[10px] text-zinc-500 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Last 7 Days
+                    <div className="mt-2 text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-1 rounded-lg w-fit">
+                        Last 7 Days
                     </div>
-                </GlassCard>
+                </div>
             </div>
 
-            {/* 2. Weekly Activity (Smart Bar Chart) */}
-            <GlassCard>
+            {/* 2. Weekly Activity (Neon Bar Chart) */}
+            <div className="glass-panel p-6 rounded-[2rem] animate-slide-up" style={{ animationDelay: '0.3s' }}>
                 <div className="flex items-center justify-between mb-6">
                     <h3 className="font-bold text-white flex items-center gap-2">
                         <TrendingUp className="w-5 h-5 text-blue-400" /> Weekly Flow
                     </h3>
-                    <div className="flex gap-2">
-                        <span className="flex items-center gap-1 text-[9px] text-zinc-500"><div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>Max</span>
-                        <span className="flex items-center gap-1 text-[9px] text-zinc-500"><div className="w-1.5 h-1.5 rounded-full bg-sber-green"></div>Min</span>
+                    <div className="flex gap-3">
+                        <span className="flex items-center gap-1.5 text-[9px] text-zinc-500 font-bold uppercase tracking-wider"><div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.8)]"></div>Max</span>
+                        <span className="flex items-center gap-1.5 text-[9px] text-zinc-500 font-bold uppercase tracking-wider"><div className="w-1.5 h-1.5 rounded-full bg-sber-green shadow-[0_0_5px_rgba(34,197,94,0.8)]"></div>Min</span>
                     </div>
                 </div>
                 
-                <div className="h-[220px] w-full">
+                <div className="h-[220px] w-full -ml-2">
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={barData} barSize={16}>
-                            <CartesianGrid vertical={false} stroke="#ffffff" strokeOpacity={0.05} strokeDasharray="3 3" />
+                        <BarChart data={barData} barSize={12}>
+                            <CartesianGrid vertical={false} stroke="#333" strokeOpacity={0.5} strokeDasharray="3 3" />
                             <XAxis 
                                 dataKey="name" 
                                 stroke="#52525b" 
-                                tick={{fill: '#71717a', fontSize: 10, fontWeight: 600}} 
+                                tick={{fill: '#71717a', fontSize: 10, fontWeight: 700}} 
                                 axisLine={false} 
                                 tickLine={false} 
                                 dy={10}
                             />
-                            <Tooltip content={<CustomTooltip />} cursor={{fill: '#ffffff', opacity: 0.05, radius: 8}} />
-                            <Bar dataKey="amount" radius={[8, 8, 8, 8]}>
+                            <Tooltip content={<CustomTooltip />} cursor={{fill: '#ffffff', opacity: 0.03, radius: 8}} />
+                            <Bar dataKey="amount" radius={[6, 6, 6, 6]}>
                                 {barData.map((entry, index) => {
-                                    let color = '#3b82f6'; // Default Blue
-                                    if (entry.amount === maxAmount && maxAmount > 0) color = '#ef4444'; // Red for Max
-                                    else if (entry.amount === minAmount && entry.amount > 0) color = '#22c55e'; // Green for Min
+                                    let color = '#3b82f6'; // Blue
+                                    let opacity = 0.6;
                                     
-                                    return <Cell key={`cell-${index}`} fill={color} />;
+                                    if (entry.amount === maxAmount && maxAmount > 0) { color = '#ef4444'; opacity = 1; } // Red Max
+                                    else if (entry.amount === minAmount && entry.amount > 0) { color = '#22c55e'; opacity = 1; } // Green Min
+                                    
+                                    return (
+                                        <Cell 
+                                            key={`cell-${index}`} 
+                                            fill={color} 
+                                            fillOpacity={opacity}
+                                            style={{ filter: `drop-shadow(0 0 8px ${color}60)` }} 
+                                        />
+                                    );
                                 })}
                             </Bar>
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
-            </GlassCard>
+            </div>
 
             {/* 3. Spending Breakdown (Donut & List) */}
-            <GlassCard>
-                <h3 className="font-bold text-white mb-6 flex items-center gap-2">
+            <div className="glass-panel p-6 rounded-[2rem] animate-slide-up" style={{ animationDelay: '0.4s' }}>
+                <h3 className="font-bold text-white mb-8 flex items-center gap-2">
                     <DollarSign className="w-5 h-5 text-sber-green" /> Breakdown
                 </h3>
                 
                 <div className="flex flex-col items-center gap-8">
                     {/* Donut Chart */}
-                    <div className="h-[220px] w-[220px] relative">
+                    <div className="h-[240px] w-[240px] relative">
+                        {/* Background Glow */}
+                        <div className="absolute inset-0 bg-white/5 rounded-full blur-3xl scale-75 animate-pulse-slow"></div>
+                        
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
                                     data={pieData}
-                                    innerRadius={70}
-                                    outerRadius={100}
-                                    paddingAngle={4}
+                                    innerRadius={75}
+                                    outerRadius={105}
+                                    paddingAngle={5}
                                     dataKey="value"
-                                    cornerRadius={6}
+                                    cornerRadius={8}
                                     stroke="none"
                                 >
                                     {pieData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} style={{ filter: `drop-shadow(0 0 5px ${entry.color}40)` }} />
+                                        <Cell 
+                                            key={`cell-${index}`} 
+                                            fill={entry.color} 
+                                            style={{ filter: `drop-shadow(0 0 6px ${entry.color}40)` }} 
+                                        />
                                     ))}
                                 </Pie>
                                 <Tooltip content={<CustomTooltip />} />
                             </PieChart>
                         </ResponsiveContainer>
+                        
                         {/* Center Text */}
                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Total</span>
-                            <span className="text-xl font-bold text-white tabular-nums">{totalExpenses.toLocaleString()}</span>
+                            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Total</span>
+                            <span className="text-2xl font-bold text-white tabular-nums drop-shadow-md">{totalExpenses.toLocaleString()}</span>
                         </div>
                     </div>
 
                     {/* Categories List */}
-                    <div className="w-full space-y-4">
+                    <div className="w-full space-y-5">
                         {pieData.slice(0, 5).map((cat, idx) => (
                             <div key={idx} className="group">
-                                <div className="flex justify-between items-center mb-1.5">
+                                <div className="flex justify-between items-center mb-2">
                                     <div className="flex items-center gap-3">
                                         <div 
-                                            className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg" 
-                                            style={{ backgroundColor: `${cat.color}20`, color: cat.color }}
+                                            className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg border border-white/5" 
+                                            style={{ backgroundColor: `${cat.color}15` }}
                                         >
-                                            <div className="w-2 h-2 rounded-full bg-current shadow-[0_0_8px_currentColor]"></div>
+                                            <div className="w-2.5 h-2.5 rounded-full shadow-[0_0_8px_currentColor]" style={{ backgroundColor: cat.color }}></div>
                                         </div>
-                                        <span className="text-sm font-bold text-gray-200">{cat.name}</span>
+                                        <span className="text-sm font-bold text-zinc-200">{cat.name}</span>
                                     </div>
                                     <div className="text-right">
-                                        <span className="text-sm font-bold text-white block">{cat.value.toLocaleString()}</span>
+                                        <span className="text-sm font-bold text-white block tabular-nums">{cat.value.toLocaleString()}</span>
                                         <span className="text-[10px] text-zinc-500 font-mono">{((cat.value / totalExpenses) * 100).toFixed(0)}%</span>
                                     </div>
                                 </div>
-                                <div className="w-full bg-zinc-900 h-1.5 rounded-full overflow-hidden">
+                                {/* Animated Progress Bar */}
+                                <div className="w-full bg-black/50 h-1.5 rounded-full overflow-hidden border border-white/5">
                                     <div 
-                                        className="h-full rounded-full transition-all duration-1000 ease-out relative"
-                                        style={{ width: `${(cat.value / totalExpenses) * 100}%`, backgroundColor: cat.color }}
+                                        className="h-full rounded-full transition-all duration-1000 ease-out relative group-hover:brightness-125"
+                                        style={{ width: `${(cat.value / totalExpenses) * 100}%`, backgroundColor: cat.color, boxShadow: `0 0 10px ${cat.color}80` }}
                                     >
-                                        <div className="absolute right-0 top-0 bottom-0 w-2 bg-white/50 blur-[1px]"></div>
+                                        <div className="absolute right-0 top-0 bottom-0 w-2 bg-white/50 blur-[2px]"></div>
                                     </div>
                                 </div>
                             </div>
                         ))}
                     </div>
                 </div>
-            </GlassCard>
+            </div>
           </>
       ) : (
-          <div className="flex flex-col items-center justify-center py-20 text-center opacity-50">
+          <div className="flex flex-col items-center justify-center py-20 text-center opacity-50 animate-fade-in">
              <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mb-6 border border-white/5 border-dashed">
-                <PieIcon size={40} strokeWidth={1} />
+                <PieIcon size={40} strokeWidth={1} className="text-zinc-600" />
              </div>
              <p className="text-lg font-bold text-white">No data yet</p>
              <p className="text-sm text-zinc-500">Add transactions to see reports.</p>
@@ -2652,11 +2714,11 @@ export const Reports: React.FC<Props> = ({ transactions, language }) => {
 ### File: `components\SettingsPage.tsx`
 ```tsx
 import React, { useState, useRef } from 'react';
-import { Settings, Globe, ChevronRight, Key, LogOut, Wallet, PiggyBank, X, Check, Trash2, Loader2, Calculator, Target, Camera, Pencil } from 'lucide-react';
+import { Settings, Globe, ChevronRight, Key, LogOut, Wallet, PiggyBank, X, Check, Trash2, Loader2, Calculator, Target, Camera, Pencil, Shield, Sparkles } from 'lucide-react';
 import { UserSettings, BudgetPlan } from '../types';
 import { TRANSLATIONS, RUSSIAN_BANKS } from '../constants';
 import { validateApiKey } from '../services/geminiService';
-import { deleteUserAccount, auth, signInWithGoogle } from '../services/firebase';
+import { deleteUserAccount, auth, reauthenticateUser, logoutUser } from '../services/firebase';
 import { BudgetPlans } from './BudgetPlans';
 
 interface Props {
@@ -2781,17 +2843,22 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
               try {
                   await deleteUserAccount(auth.currentUser.uid);
               } catch (error: any) {
-                  if (error.code === 'auth/requires-recent-login' || error.message?.includes('login')) {
+                  // Catch the specific "Recent Login Required" error
+                  if (error.code === 'auth/requires-recent-login' || error.message?.includes('recent-login')) {
                       const reAuthConfirm = window.confirm(
                           user.language === 'ar' 
-                          ? "لحماية أمانك، يرجى إعادة تسجيل الدخول لتأكيد الحذف." 
-                          : "For security, please sign in again to confirm deletion."
+                          ? "لأغراض أمنية، يرجى تأكيد هويتك (إعادة المصادقة) لإتمام حذف الحساب." 
+                          : "For security, please confirm your identity (re-authenticate) to complete account deletion."
                       );
                       
                       if (reAuthConfirm) {
-                          await signInWithGoogle();
-                          if (auth.currentUser) {
+                          // Trigger Re-authentication popup
+                          const reauthed = await reauthenticateUser();
+                          if (reauthed && auth.currentUser) {
+                              // Retry delete immediately after success
                               await deleteUserAccount(auth.currentUser.uid);
+                          } else {
+                              throw new Error("Re-authentication failed or cancelled.");
                           }
                       } else {
                           setIsDeleting(false);
@@ -2803,114 +2870,133 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
               }
           }
           
+          // Cleanup Local Data
           localStorage.removeItem('masareefy_user');
           localStorage.removeItem('masareefy_txs');
+          
+          // Force Reload to go back to clean slate
           window.location.reload();
           
-      } catch (error) {
+      } catch (error: any) {
           console.error("Delete failed:", error);
-          alert(user.language === 'ar' ? "فشل حذف الحساب." : "Failed to delete account.");
+          alert(user.language === 'ar' 
+            ? `فشل حذف الحساب: ${error.message}` 
+            : `Failed to delete account: ${error.message}`);
           setIsDeleting(false);
       }
   };
 
-  const SettingRow = ({ icon: Icon, title, value, onClick, color = "text-gray-400" }: any) => (
+  // Reusable Modern Row
+  const SettingRow = ({ icon: Icon, title, value, onClick, color = "text-zinc-400", delay = 0 }: any) => (
     <button 
         onClick={onClick}
-        className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors group"
+        className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-all duration-300 group rounded-xl active:scale-[0.99]"
     >
-        <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg bg-zinc-900 border border-white/5 ${color}`}>
+        <div className="flex items-center gap-4">
+            <div className={`p-2.5 rounded-xl bg-black/40 border border-white/5 shadow-inner transition-colors group-hover:border-white/10 ${color}`}>
                 <Icon size={18} />
             </div>
-            <span className="font-medium text-gray-200 text-sm">{title}</span>
+            <span className="font-medium text-gray-200 text-sm tracking-wide group-hover:text-white transition-colors">{title}</span>
         </div>
-        <div className="flex items-center gap-2">
-            <span className="text-zinc-500 text-xs font-medium">{value}</span>
-            <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-white transition-colors" />
+        <div className="flex items-center gap-3">
+            <span className="text-zinc-500 text-xs font-medium font-mono bg-white/5 px-2 py-1 rounded-md border border-white/5 group-hover:bg-white/10 transition-colors">{value}</span>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white/0 group-hover:bg-white/5 transition-colors">
+                 <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-white transition-colors" />
+            </div>
         </div>
     </button>
   );
 
   return (
-    <div className="pb-24 space-y-6">
+    <div className="pb-40 space-y-8 px-1">
       
-      {/* Header */}
-      <div className="flex items-center gap-3 px-2 mb-4">
-          <div className="bg-sber-green/10 p-3 rounded-2xl border border-sber-green/20">
-              <Settings className="w-6 h-6 text-sber-green" />
+      {/* 1. Header Area */}
+      <div className="flex items-center justify-between pt-4 animate-slide-down">
+          <div>
+            <h2 className="text-4xl font-bold text-white tracking-tighter mb-1">{t.settings}</h2>
+            <p className="text-zinc-500 text-xs font-medium uppercase tracking-widest">Preferences & Account</p>
           </div>
-          <h2 className="text-2xl font-bold text-white leading-none">{t.settings}</h2>
+          <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center border border-white/10 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
+              <Settings className="w-5 h-5 text-zinc-400 animate-spin-slow" />
+          </div>
       </div>
 
-      {/* Profile Section (NEW: Editable) */}
-      <div className="bg-[#1C1C1E] p-6 rounded-[2rem] border border-white/5 flex items-center gap-4">
-          <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-            {user.photoURL ? (
-                <img src={user.photoURL} alt="Profile" className="w-16 h-16 rounded-full border-2 border-zinc-800 object-cover" />
-            ) : (
-                <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center border-2 border-zinc-700">
-                    <span className="text-2xl font-bold text-gray-400">{user.name.charAt(0).toUpperCase()}</span>
-                </div>
-            )}
-            
-            {/* Camera Overlay */}
-            <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <Camera size={20} className="text-white" />
-            </div>
-
-            {user.isGuest && (
-                <div className="absolute -bottom-1 -right-1 bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full border border-black z-10">
-                    GUEST
-                </div>
-            )}
-            <input 
-                type="file" 
-                ref={fileInputRef} 
-                className="hidden" 
-                accept="image/*" 
-                onChange={handleImageUpload} 
-            />
-          </div>
+      {/* 2. Profile Hero Card */}
+      <div className="relative glass-panel p-6 rounded-[2.5rem] overflow-hidden group animate-scale-in" style={{ animationDelay: '0.1s' }}>
+          {/* Ambient Glow */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-sber-green/10 rounded-full blur-[80px] -mr-20 -mt-20 group-hover:bg-sber-green/20 transition-colors duration-700 pointer-events-none"></div>
           
-          <div className="flex-1">
-              {isEditingName ? (
-                  <div className="flex items-center gap-2 animate-in fade-in">
-                      <input 
-                        type="text" 
-                        value={newName}
-                        onChange={(e) => setNewName(e.target.value)}
-                        className="bg-black border border-zinc-700 rounded-lg px-2 py-1 text-white font-bold text-lg w-full outline-none focus:border-sber-green"
-                        autoFocus
-                      />
-                      <button onClick={saveName} className="p-1.5 bg-sber-green rounded-md text-white hover:bg-green-600"><Check size={16} /></button>
-                      <button onClick={() => { setIsEditingName(false); setNewName(user.name); }} className="p-1.5 bg-zinc-700 rounded-md text-white hover:bg-zinc-600"><X size={16} /></button>
-                  </div>
-              ) : (
-                  <div>
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2 group">
-                        {user.name || 'Guest User'}
-                        <button onClick={() => setIsEditingName(true)} className="text-zinc-500 hover:text-white transition-colors opacity-0 group-hover:opacity-100">
-                            <Pencil size={14} />
-                        </button>
-                    </h3>
-                    <p className="text-xs text-gray-400 font-mono mt-1 truncate max-w-[200px]">
-                        ID: {user.apiKey ? '••••' + user.apiKey.slice(-4) : 'No API Key'}
-                    </p>
-                  </div>
-              )}
+          <div className="flex items-center gap-5 relative z-10">
+              <div className="relative cursor-pointer group/avatar" onClick={() => fileInputRef.current?.click()}>
+                <div className="w-20 h-20 rounded-[1.5rem] p-1 bg-gradient-to-br from-white/10 to-transparent border border-white/10 shadow-xl overflow-hidden relative">
+                    {user.photoURL ? (
+                        <img src={user.photoURL} alt="Profile" className="w-full h-full rounded-[1.2rem] object-cover" />
+                    ) : (
+                        <div className="w-full h-full rounded-[1.2rem] bg-zinc-900 flex items-center justify-center">
+                            <span className="text-2xl font-bold text-gray-500">{user.name.charAt(0).toUpperCase()}</span>
+                        </div>
+                    )}
+                    {/* Hover Overlay */}
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity duration-300">
+                        <Camera size={24} className="text-white drop-shadow-lg" />
+                    </div>
+                </div>
+                {user.isGuest && (
+                    <div className="absolute -bottom-2 -right-2 bg-yellow-500 text-black text-[9px] font-black px-2 py-0.5 rounded-full border-2 border-[#121212] z-20 shadow-lg">
+                        GUEST
+                    </div>
+                )}
+                <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
+              </div>
+              
+              <div className="flex-1 min-w-0">
+                  {isEditingName ? (
+                      <div className="flex items-center gap-2 animate-in fade-in">
+                          <input 
+                            type="text" 
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                            className="bg-black/50 border border-white/20 rounded-xl px-3 py-2 text-white font-bold text-lg w-full outline-none focus:border-sber-green focus:ring-1 focus:ring-sber-green transition-all"
+                            autoFocus
+                          />
+                          <button onClick={saveName} className="p-2.5 bg-sber-green rounded-xl text-white shadow-lg hover:bg-green-600 transition-colors active:scale-95"><Check size={18} /></button>
+                          <button onClick={() => { setIsEditingName(false); setNewName(user.name); }} className="p-2.5 bg-white/10 rounded-xl text-zinc-400 hover:text-white hover:bg-white/20 transition-colors"><X size={18} /></button>
+                      </div>
+                  ) : (
+                      <div className="group/name">
+                        <div className="flex items-center gap-2 mb-1">
+                            <h3 className="text-2xl font-bold text-white truncate">{user.name || 'Guest User'}</h3>
+                            <button onClick={() => setIsEditingName(true)} className="p-1.5 rounded-lg text-zinc-600 hover:text-white hover:bg-white/10 transition-colors opacity-0 group-hover/name:opacity-100">
+                                <Pencil size={14} />
+                            </button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded-md bg-white/5 border border-white/5 text-[10px] font-mono text-zinc-500">
+                                ID: {user.apiKey ? '••••' + user.apiKey.slice(-4) : 'N/A'}
+                            </span>
+                            {!user.isGuest && (
+                                <span className="flex items-center gap-1 text-[10px] text-sber-green font-bold bg-sber-green/10 px-2 py-0.5 rounded-md border border-sber-green/20">
+                                    <Shield size={10} /> PRO
+                                </span>
+                            )}
+                        </div>
+                      </div>
+                  )}
+              </div>
           </div>
       </div>
       
-      {/* General Settings */}
-      <div className="space-y-2">
-          <h3 className="px-4 text-xs font-bold text-zinc-500 uppercase tracking-widest">Preferences</h3>
-          <div className="bg-[#1C1C1E] rounded-[2rem] border border-white/5 overflow-hidden">
+      {/* 3. General Settings Group */}
+      <div className="space-y-3 animate-slide-up" style={{ animationDelay: '0.2s' }}>
+          <h3 className="px-2 text-xs font-bold text-zinc-600 uppercase tracking-widest flex items-center gap-2">
+              <span className="w-1 h-1 bg-zinc-600 rounded-full"></span> Application
+          </h3>
+          <div className="bg-[#121212]/80 backdrop-blur-md rounded-[2rem] border border-white/5 overflow-hidden p-1 shadow-2xl">
             <SettingRow 
                 icon={Globe} 
                 title="Language" 
                 value={user.language === 'ar' ? 'العربية' : user.language === 'ru' ? 'Русский' : 'English'} 
-                color="text-purple-400"
+                color="text-indigo-400 group-hover:text-indigo-300"
                 onClick={() => setUser(u => ({...u, language: u.language === 'en' ? 'ar' : u.language === 'ar' ? 'ru' : 'en'}))}
             />
             <div className="h-[1px] bg-white/5 mx-4" />
@@ -2918,7 +3004,7 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
                 icon={Target} 
                 title="Currency" 
                 value={user.currency} 
-                color="text-yellow-400"
+                color="text-emerald-400 group-hover:text-emerald-300"
                 onClick={() => {
                     const currencies: any[] = ['USD', 'SAR', 'AED', 'RUB'];
                     const nextIdx = (currencies.indexOf(user.currency) + 1) % currencies.length;
@@ -2928,150 +3014,165 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
           </div>
       </div>
 
-      {/* Budget & Plans */}
-      <div className="space-y-2">
-          <h3 className="px-4 text-xs font-bold text-zinc-500 uppercase tracking-widest">Budget & Goals</h3>
-          <div className="bg-[#1C1C1E] rounded-[2rem] border border-white/5 overflow-hidden">
+      {/* 4. Budget & Wallets Group */}
+      <div className="space-y-3 animate-slide-up" style={{ animationDelay: '0.3s' }}>
+          <h3 className="px-2 text-xs font-bold text-zinc-600 uppercase tracking-widest flex items-center gap-2">
+             <span className="w-1 h-1 bg-zinc-600 rounded-full"></span> Finance Control
+          </h3>
+          <div className="bg-[#121212]/80 backdrop-blur-md rounded-[2rem] border border-white/5 overflow-hidden p-1 shadow-2xl">
              <SettingRow 
                 icon={Calculator} 
                 title={user.language === 'ar' ? 'خطة الصرف' : 'Budget Plan'}
-                value={user.selectedPlan ? user.selectedPlan.toUpperCase() : 'Not Set'} 
-                color="text-blue-400"
+                value={user.selectedPlan ? user.selectedPlan.toUpperCase() : 'NOT SET'} 
+                color="text-blue-400 group-hover:text-blue-300"
                 onClick={() => setShowPlanModal(true)}
             />
-          </div>
-      </div>
-
-      {/* Wallet Management */}
-      <div className="space-y-2">
-          <h3 className="px-4 text-xs font-bold text-zinc-500 uppercase tracking-widest">Wallets</h3>
-          <div className="bg-[#1C1C1E] rounded-[2rem] border border-white/5 overflow-hidden">
-             {/* Spending Wallet Row */}
+             <div className="h-[1px] bg-white/5 mx-4" />
+             {/* Spending Wallet */}
              <button 
                 onClick={() => openWalletEdit('spending')}
-                className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors group"
+                className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-all duration-300 group rounded-xl active:scale-[0.99]"
              >
-                <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-zinc-900 border border-white/5 text-white">
+                <div className="flex items-center gap-4">
+                    <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 shadow-inner transition-colors group-hover:border-white/10 text-white">
                         <Wallet size={18} />
                     </div>
                     <div className="text-left">
-                        <span className="font-medium text-gray-200 text-sm block">Main Wallet</span>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: user.spendingBankColor }}></div>
-                             <span className="text-[10px] text-zinc-500">{user.spendingBankName}</span>
+                        <span className="font-medium text-gray-200 text-sm tracking-wide group-hover:text-white transition-colors block">Main Wallet</span>
+                        <div className="flex items-center gap-1.5 mt-1">
+                             <div className="w-1.5 h-1.5 rounded-full shadow-[0_0_5px_currentColor]" style={{ backgroundColor: user.spendingBankColor, color: user.spendingBankColor }}></div>
+                             <span className="text-[10px] text-zinc-500 group-hover:text-zinc-400 transition-colors">{user.spendingBankName}</span>
                         </div>
                     </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-white transition-colors" />
+                <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white/0 group-hover:bg-white/5 transition-colors">
+                     <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-white transition-colors" />
+                </div>
              </button>
 
              <div className="h-[1px] bg-white/5 mx-4" />
 
-             {/* Savings Wallet Row */}
+             {/* Savings Wallet */}
              <button 
                 onClick={() => openWalletEdit('savings')}
-                className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors group"
+                className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-all duration-300 group rounded-xl active:scale-[0.99]"
              >
-                <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-zinc-900 border border-white/5 text-sber-green">
+                <div className="flex items-center gap-4">
+                    <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 shadow-inner transition-colors group-hover:border-white/10 text-sber-green">
                         <PiggyBank size={18} />
                     </div>
                     <div className="text-left">
-                        <span className="font-medium text-gray-200 text-sm block">Savings Pot</span>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: user.savingsBankColor }}></div>
-                             <span className="text-[10px] text-zinc-500">{user.savingsBankName}</span>
+                        <span className="font-medium text-gray-200 text-sm tracking-wide group-hover:text-white transition-colors block">Savings Pot</span>
+                        <div className="flex items-center gap-1.5 mt-1">
+                             <div className="w-1.5 h-1.5 rounded-full shadow-[0_0_5px_currentColor]" style={{ backgroundColor: user.savingsBankColor, color: user.savingsBankColor }}></div>
+                             <span className="text-[10px] text-zinc-500 group-hover:text-zinc-400 transition-colors">{user.savingsBankName}</span>
                         </div>
                     </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-white transition-colors" />
+                <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white/0 group-hover:bg-white/5 transition-colors">
+                     <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-white transition-colors" />
+                </div>
              </button>
           </div>
       </div>
 
-      {/* AI Settings */}
-      <div className="space-y-2">
-          <h3 className="px-4 text-xs font-bold text-zinc-500 uppercase tracking-widest">Intelligence</h3>
-          <div className="bg-[#1C1C1E] rounded-[2rem] border border-white/5 overflow-hidden p-1">
+      {/* 5. Intelligence (AI) Group */}
+      <div className="space-y-3 animate-slide-up" style={{ animationDelay: '0.4s' }}>
+          <h3 className="px-2 text-xs font-bold text-zinc-600 uppercase tracking-widest flex items-center gap-2">
+             <span className="w-1 h-1 bg-zinc-600 rounded-full"></span> Intelligence
+          </h3>
+          <div className="bg-[#121212]/80 backdrop-blur-md rounded-[2rem] border border-white/5 overflow-hidden p-1 shadow-2xl">
              <button 
                 onClick={() => setShowKeyInput(!showKeyInput)}
-                className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors rounded-[1.8rem]"
+                className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors rounded-[1.8rem] group"
              >
-                <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-zinc-900 border border-white/5 text-sber-green">
-                        <Key size={18} />
+                <div className="flex items-center gap-4">
+                    <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 shadow-inner text-purple-400 group-hover:text-purple-300">
+                        <Sparkles size={18} />
                     </div>
                     <div className="text-left">
-                        <span className="font-medium text-gray-200 text-sm block">Gemini API Key</span>
-                        <span className="text-[10px] text-zinc-500 block">Required for AI analysis</span>
+                        <span className="font-medium text-gray-200 text-sm block group-hover:text-white transition-colors">Gemini AI Core</span>
+                        <span className="text-[10px] text-zinc-500 block group-hover:text-zinc-400 transition-colors">Manage neural engine access</span>
                     </div>
                 </div>
-                <ChevronRight className={`w-4 h-4 text-zinc-600 transition-transform ${showKeyInput ? 'rotate-90' : ''}`} />
+                <ChevronRight className={`w-4 h-4 text-zinc-600 transition-transform duration-300 ${showKeyInput ? 'rotate-90 text-white' : ''}`} />
              </button>
 
+             {/* Expandable Key Input */}
              {showKeyInput && (
-                 <div className="px-4 pb-4 animate-in slide-in-from-top-2">
-                     <p className="text-xs text-gray-500 mb-3 leading-relaxed">
-                        {t.change_key_desc}
-                     </p>
-                     <div className="flex gap-2">
-                        <input 
-                            type="password" 
-                            placeholder="Paste new API Key" 
-                            value={editingKey}
-                            onChange={(e) => setEditingKey(e.target.value)}
-                            className="flex-1 bg-black border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-sber-green outline-none"
-                        />
-                        <button 
-                            onClick={handleUpdateApiKey}
-                            disabled={!editingKey || isValidatingKey}
-                            className="bg-white text-black px-4 rounded-xl font-bold text-xs disabled:opacity-50"
-                        >
-                            {isValidatingKey ? <Loader2 className="animate-spin w-4 h-4" /> : 'Save'}
-                        </button>
+                 <div className="px-4 pb-4 pt-2 animate-in slide-in-from-top-2 fade-in">
+                     <div className="bg-black/40 rounded-2xl p-4 border border-white/5">
+                        <p className="text-xs text-gray-500 mb-3 leading-relaxed">
+                            {t.change_key_desc}
+                        </p>
+                        <div className="flex gap-2">
+                            <div className="flex-1 relative">
+                                <Key size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" />
+                                <input 
+                                    type="password" 
+                                    placeholder="Paste new API Key" 
+                                    value={editingKey}
+                                    onChange={(e) => setEditingKey(e.target.value)}
+                                    className="w-full bg-black border border-white/10 rounded-xl pl-9 pr-3 py-3 text-sm focus:border-purple-500 focus:shadow-[0_0_15px_rgba(168,85,247,0.2)] outline-none transition-all placeholder-zinc-700 text-white"
+                                />
+                            </div>
+                            <button 
+                                onClick={handleUpdateApiKey}
+                                disabled={!editingKey || isValidatingKey}
+                                className="bg-white text-black px-5 rounded-xl font-bold text-xs disabled:opacity-50 hover:bg-gray-200 transition-colors shadow-lg"
+                            >
+                                {isValidatingKey ? <Loader2 className="animate-spin w-4 h-4" /> : 'Save'}
+                            </button>
+                        </div>
                      </div>
                  </div>
              )}
           </div>
       </div>
 
-      {/* Danger Zone */}
-      <div className="space-y-3 pt-4">
+      {/* 6. Danger Zone */}
+      <div className="grid grid-cols-2 gap-3 pt-4 animate-slide-up" style={{ animationDelay: '0.5s' }}>
           <button 
             onClick={onLogout}
-            className="w-full bg-[#1C1C1E] border border-white/5 hover:bg-white/10 p-4 rounded-[1.5rem] flex items-center justify-center gap-2 transition-all group"
+            className="bg-[#1C1C1E] border border-white/5 hover:bg-white/10 p-5 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-all group hover:border-white/10"
           >
-            <LogOut size={18} className="text-zinc-400 group-hover:text-white" />
-            <span className="font-bold text-zinc-400 group-hover:text-white text-sm">{t.sign_out}</span>
+            <LogOut size={20} className="text-zinc-500 group-hover:text-white transition-colors" />
+            <span className="font-bold text-zinc-500 group-hover:text-white text-xs uppercase tracking-widest">{t.sign_out}</span>
           </button>
 
           <button 
             onClick={handleDeleteAccount}
             disabled={isDeleting}
-            className="w-full bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 p-4 rounded-[1.5rem] flex items-center justify-center gap-2 transition-all group"
+            className="bg-red-500/5 border border-red-500/10 hover:bg-red-500/10 hover:border-red-500/30 p-5 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-all group relative overflow-hidden"
           >
-            {isDeleting ? <Loader2 size={18} className="animate-spin text-red-500" /> : <Trash2 size={18} className="text-red-500" />}
-            <span className="font-bold text-red-500 text-sm">
-                {user.language === 'ar' ? "حذف الحساب نهائياً" : "Delete Account Permanently"}
-            </span>
+            <div className="absolute inset-0 bg-red-500/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            {isDeleting ? <Loader2 size={20} className="animate-spin text-red-500" /> : <Trash2 size={20} className="text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]" />}
+            <span className="font-bold text-red-500 text-xs uppercase tracking-widest relative z-10">Delete</span>
           </button>
-          
-          <div className="text-center pt-2">
-              <p className="text-[10px] text-zinc-600 font-mono">Masareefy v2.4.0 (Premium)</p>
-          </div>
       </div>
+
+      <div className="text-center pt-6 pb-2 opacity-30 hover:opacity-100 transition-opacity duration-500">
+           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/5">
+              <span className="w-1.5 h-1.5 bg-sber-green rounded-full shadow-[0_0_5px_currentColor]"></span>
+              <p className="text-[9px] text-zinc-400 font-mono tracking-widest">v2.5.0 • TITAN ENGINE ACTIVE</p>
+           </div>
+      </div>
+
+      {/* --- MODALS --- */}
 
       {/* Plan Selection Modal */}
       {showPlanModal && (
           <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4">
-              <div className="absolute inset-0 bg-black/80 backdrop-blur-md transition-opacity" onClick={() => setShowPlanModal(false)} />
-              <div className="relative w-full max-w-lg bg-[#000] border border-white/10 rounded-t-[2rem] sm:rounded-[2rem] p-6 animate-in slide-in-from-bottom-full duration-300 max-h-[90vh] overflow-y-auto">
-                   <div className="w-12 h-1 bg-zinc-700 rounded-full mx-auto mb-6 sm:hidden" />
+              <div className="absolute inset-0 bg-black/80 backdrop-blur-xl transition-opacity duration-500" onClick={() => setShowPlanModal(false)} />
+              <div className="relative w-full max-w-lg glass-strong border border-white/10 rounded-t-[2.5rem] sm:rounded-[2.5rem] p-8 animate-in slide-in-from-bottom-full duration-500 max-h-[90vh] overflow-y-auto shadow-2xl ring-1 ring-white/10">
+                   <div className="w-12 h-1 bg-white/20 rounded-full mx-auto mb-8 sm:hidden" />
                    
-                   <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-xl font-bold text-white">Select a Plan</h3>
-                        <button onClick={() => setShowPlanModal(false)} className="p-2 bg-white/5 rounded-full"><X size={16} /></button>
+                   <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <h3 className="text-2xl font-bold text-white">Select Strategy</h3>
+                            <p className="text-zinc-500 text-xs mt-1">Choose your spending behavior.</p>
+                        </div>
+                        <button onClick={() => setShowPlanModal(false)} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"><X size={18} /></button>
                    </div>
                    
                    <BudgetPlans user={user} onSelectPlan={handlePlanSelection} />
@@ -3082,18 +3183,21 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
       {/* Wallet Edit Modal */}
       {editingWallet && (
          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4">
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-md transition-opacity" onClick={() => setEditingWallet(null)} />
-            <div className="relative w-full max-w-sm bg-[#1C1C1E] border border-white/10 rounded-t-[2rem] sm:rounded-[2rem] p-6 animate-in slide-in-from-bottom-full duration-300">
-               <div className="w-12 h-1 bg-zinc-700 rounded-full mx-auto mb-6 sm:hidden" />
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-xl transition-opacity duration-500" onClick={() => setEditingWallet(null)} />
+            <div className="relative w-full max-w-sm glass-strong border border-white/10 rounded-t-[2.5rem] sm:rounded-[2.5rem] p-8 animate-in slide-in-from-bottom-full duration-500 shadow-2xl">
+               <div className="w-12 h-1 bg-white/20 rounded-full mx-auto mb-8 sm:hidden" />
                
                <div className="flex items-center justify-between mb-6">
-                   <h3 className="text-xl font-bold text-white">Edit {editingWallet === 'spending' ? 'Main Wallet' : 'Savings'}</h3>
-                   <button onClick={() => setEditingWallet(null)} className="p-2 bg-white/5 rounded-full"><X size={16} /></button>
+                   <div>
+                       <h3 className="text-xl font-bold text-white">Configure Wallet</h3>
+                       <p className="text-zinc-500 text-xs mt-1">{editingWallet === 'spending' ? 'Main Spending Source' : 'Savings Destination'}</p>
+                   </div>
+                   <button onClick={() => setEditingWallet(null)} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"><X size={18} /></button>
                </div>
 
-               <div className="space-y-4">
-                  {/* Bank Grid with LOGOS */}
-                  <div className="grid grid-cols-4 gap-3 max-h-[300px] overflow-y-auto pr-1">
+               <div className="space-y-6">
+                  {/* Bank Grid */}
+                  <div className="grid grid-cols-4 gap-3 max-h-[240px] overflow-y-auto pr-1 custom-scrollbar">
                       {RUSSIAN_BANKS.filter(b => b.id !== 'other').map(bank => (
                           <button
                               key={bank.id}
@@ -3102,13 +3206,13 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
                                   setTempName(bank.name);
                                   setTempColor(bank.color);
                               }}
-                              className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all border ${tempBankId === bank.id ? 'bg-white/10 border-sber-green scale-105' : 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800'}`}
+                              className={`flex flex-col items-center gap-2 p-3 rounded-2xl transition-all border duration-300 ${tempBankId === bank.id ? 'bg-white/10 border-sber-green shadow-[0_0_15px_rgba(33,160,56,0.3)] scale-105' : 'bg-black/40 border-white/5 hover:bg-white/5'}`}
                           >
                               {bank.logo ? (
                                   <img 
                                     src={bank.logo} 
                                     alt={bank.name} 
-                                    className="w-10 h-10 rounded-full object-cover shadow-lg bg-white"
+                                    className="w-10 h-10 rounded-full object-cover shadow-lg bg-white p-0.5"
                                   />
                               ) : (
                                   <div 
@@ -3118,41 +3222,41 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
                                       {bank.name.substring(0, 2).toUpperCase()}
                                   </div>
                               )}
-                              <span className="text-[9px] text-zinc-400 truncate w-full">{bank.name}</span>
+                              <span className="text-[9px] text-zinc-400 truncate w-full text-center font-medium">{bank.name}</span>
                           </button>
                       ))}
                       <button
                           onClick={() => setTempBankId('other')}
-                          className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all border ${tempBankId === 'other' ? 'bg-white/10 border-sber-green scale-105' : 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800'}`}
+                          className={`flex flex-col items-center gap-2 p-3 rounded-2xl transition-all border duration-300 ${tempBankId === 'other' ? 'bg-white/10 border-sber-green shadow-[0_0_15px_rgba(33,160,56,0.3)] scale-105' : 'bg-black/40 border-white/5 hover:bg-white/5'}`}
                       >
-                          <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-[10px] bg-zinc-700 text-white">
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-[10px] bg-zinc-800 text-white border border-white/10">
                               ...
                           </div>
-                          <span className="text-[9px] text-zinc-400">Custom</span>
+                          <span className="text-[9px] text-zinc-400 font-medium">Custom</span>
                       </button>
                   </div>
 
                   {/* Custom Inputs */}
                   {tempBankId === 'other' && (
-                      <div className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 space-y-3 animate-in fade-in">
+                      <div className="bg-black/40 p-5 rounded-3xl border border-white/10 space-y-4 animate-in fade-in slide-in-from-top-2">
                           <div>
-                              <label className="text-[10px] text-zinc-500 uppercase font-bold mb-1 block">Bank Name</label>
+                              <label className="text-[10px] text-zinc-500 uppercase font-bold mb-2 block tracking-wider">Bank Name</label>
                               <input 
                                   type="text" 
                                   value={tempName} 
                                   onChange={e => setTempName(e.target.value)} 
                                   placeholder="My Bank"
-                                  className="w-full bg-black p-3 rounded-xl border border-zinc-700 text-white text-sm focus:border-sber-green outline-none"
+                                  className="w-full bg-black p-4 rounded-2xl border border-white/10 text-white text-sm focus:border-sber-green focus:shadow-[0_0_15px_rgba(33,160,56,0.2)] outline-none transition-all placeholder-zinc-700"
                               />
                           </div>
                           <div>
-                              <label className="text-[10px] text-zinc-500 uppercase font-bold mb-1 block">Card Color</label>
-                              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                              <label className="text-[10px] text-zinc-500 uppercase font-bold mb-2 block tracking-wider">Card Color</label>
+                              <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
                                   {['#21A038', '#EF3124', '#002882', '#FFDD2D', '#000000', '#BF5AF2', '#FF9500'].map(c => (
                                       <button
                                           key={c}
                                           onClick={() => setTempColor(c)}
-                                          className={`w-8 h-8 rounded-full border-2 transition-transform ${tempColor === c ? 'border-white scale-110' : 'border-transparent'}`}
+                                          className={`w-8 h-8 rounded-full border-2 transition-all duration-300 ${tempColor === c ? 'border-white scale-125 shadow-lg' : 'border-transparent hover:scale-110'}`}
                                           style={{ backgroundColor: c }}
                                       />
                                   ))}
@@ -3163,14 +3267,428 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
 
                   <button 
                       onClick={saveWalletChanges}
-                      className="w-full bg-sber-green text-white font-bold py-4 rounded-xl mt-2 flex items-center justify-center gap-2"
+                      className="w-full bg-white text-black font-bold py-4 rounded-2xl mt-4 flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:bg-gray-200 transition-all active:scale-95 text-sm"
                   >
-                      <Check size={18} /> Save Changes
+                      <Check size={18} strokeWidth={2.5} /> Save Changes
                   </button>
                </div>
             </div>
          </div>
       )}
+    </div>
+  );
+};
+```
+---
+
+### File: `components\TitanSimulator.tsx`
+```tsx
+import React, { useState, useRef } from 'react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BrainCircuit, Zap, AlertTriangle, Clock, Activity, ShieldAlert, Sparkles, ChevronLeft, ScanLine, Wallet, PiggyBank, Receipt, Cpu, ChevronRight } from 'lucide-react';
+import { UserSettings, Transaction, TitanAnalysis } from '../types';
+import { analyzeMultiverse, extractItemFromImage } from '../services/titanService';
+
+interface Props {
+  user: UserSettings;
+  transactions: Transaction[];
+  onBack: () => void;
+}
+
+export const TitanSimulator: React.FC<Props> = ({ user, transactions, onBack }) => {
+  const [item, setItem] = useState('');
+  const [price, setPrice] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [result, setResult] = useState<TitanAnalysis | null>(null);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Calculate stats for context bar
+  const totalBills = user.recurringBills?.reduce((sum, b) => sum + b.amount, 0) || 0;
+
+  // Local Translations
+  const txt = {
+      title: { en: "TITAN ENGINE", ar: "محرك التيتان", ru: "ДВИГАТЕЛЬ ТИТАН" },
+      subtitle: { en: "Temporal Probability Simulator", ar: "محاكي الاحتمالات الزمنية", ru: "Симулятор вероятностей" },
+      desire: { en: "Target Acquisition", ar: "تحديد الهدف الشرائي", ru: "Цель покупки" },
+      itemName: { en: "Item Designation", ar: "اسم المنتج", ru: "Название товара" },
+      itemPlaceholder: { en: "e.g. iPhone 16 Pro", ar: "مثلاً: آيفون 16", ru: "например, iPhone 16" },
+      price: { en: "Estimated Cost", ar: "التكلفة التقديرية", ru: "Цена" },
+      simulate: { en: "Initialize Simulation", ar: "بدء المحاكاة", ru: "Запуск симуляции" },
+      collapsing: { en: "Collapsing Timelines...", ar: "جاري دمج المسارات الزمنية...", ru: "Анализ временных линий..." },
+      scanning: { en: "Scanning Optical Data...", ar: "جاري تحليل البيانات البصرية...", ru: "Сканирование..." },
+      scanBtn: { en: "Scan Tag / Product", ar: "مسح المنتج / السعر", ru: "Сканировать товар" },
+      lifeEnergy: { en: "Life Energy Drain", ar: "استنزاف طاقة الحياة", ru: "Расход энергии" },
+      hours: { en: "Work Hours Required", ar: "ساعات العمل المطلوبة", ru: "Часов работы" },
+      trajectories: { en: "Timeline Projections", ar: "إسقاطات المسار الزمني", ru: "Проекции" },
+      risks: { en: "Critical Anomalies", ar: "شذوذ مالي حرج", ru: "Критические риски" },
+      verdict: { en: "AI System Verdict", ar: "حكم النظام الذكي", ru: "Вердикт системы" },
+      newSim: { en: "Reset System", ar: "إعادة ضبط النظام", ru: "Сброс" },
+      // Status Bar Labels
+      wallet: { en: "LIQUIDITY", ar: "السيولة", ru: "ЛИКВИДНОСТЬ" },
+      savings: { en: "RESERVES", ar: "الاحتياطي", ru: "РЕЗЕРВЫ" },
+      bills: { en: "LIABILITIES", ar: "الالتزامات", ru: "ОБЯЗАТЕЛЬСТВА" },
+  };
+
+  const t = (key: keyof typeof txt) => txt[key][user.language];
+
+  const handleSimulate = async () => {
+    if (!item || !price) return;
+    setLoading(true);
+    try {
+      const analysis = await analyzeMultiverse(user, transactions, item, parseFloat(price));
+      setResult(analysis);
+    } catch (e) {
+      alert(user.language === 'ar' ? "حدث خطأ في المحرك الزمني." : "Temporal engine malfunction.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleScanImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      setScanning(true);
+      try {
+          const data = await extractItemFromImage(file, user.apiKey);
+          if (data.name) setItem(data.name);
+          if (data.price) setPrice(data.price.toString());
+      } catch (error) {
+          alert(user.language === 'ar' ? "فشل تحليل الصورة" : "Failed to scan image");
+      } finally {
+          setScanning(false);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+  };
+
+  // Merge timelines for the chart
+  const getChartData = () => {
+    if (!result) return [];
+    const baseTimeline = result.scenarios[0].timeline;
+    
+    return baseTimeline.map((point, index) => {
+        const collapsePoint = result.scenarios.find(s => s.id === 'collapse')?.timeline[index];
+        const warriorPoint = result.scenarios.find(s => s.id === 'warrior')?.timeline[index];
+        const wealthPoint = result.scenarios.find(s => s.id === 'wealth')?.timeline[index];
+
+        return {
+            date: point.date.slice(5), // MM-DD
+            Collapse: collapsePoint?.balance || 0,
+            Warrior: warriorPoint?.balance || 0,
+            Wealth: wealthPoint?.balance || 0,
+        };
+    });
+  };
+
+  const chartData = getChartData();
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-black/90 border border-purple-500/50 p-4 rounded-xl shadow-[0_0_30px_rgba(168,85,247,0.3)] backdrop-blur-xl">
+          <p className="text-purple-300 text-[10px] font-mono mb-2 tracking-widest uppercase">T-Minus: {label}</p>
+          {payload.map((p: any) => (
+            <div key={p.name} className="flex items-center gap-3 mb-1">
+                <div className="w-1.5 h-1.5 rounded-sm" style={{ backgroundColor: p.color, boxShadow: `0 0 8px ${p.color}` }}></div>
+                <span className="text-xs font-bold text-white w-20 uppercase tracking-wider">{p.name}</span>
+                <span className="text-xs font-mono text-white tabular-nums">{Number(p.value).toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div className="min-h-screen bg-black text-white font-sans selection:bg-purple-500/30 pb-32 relative overflow-hidden" dir={user.language === 'ar' ? 'rtl' : 'ltr'}>
+        
+        {/* Background Grid & Ambience */}
+        <div className="fixed inset-0 pointer-events-none z-0">
+            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5 mix-blend-overlay"></div>
+            <div className="absolute top-0 left-0 w-full h-full bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_at_center,black,transparent_80%)]"></div>
+            <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-purple-900/20 rounded-full blur-[120px] animate-pulse-slow"></div>
+            <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-indigo-900/10 rounded-full blur-[100px]"></div>
+        </div>
+
+        {/* Header */}
+        <div className="relative z-10 flex items-center justify-between mb-8 px-2 pt-2">
+            <button onClick={onBack} className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-colors group">
+                <ChevronLeft size={20} className={`text-zinc-400 group-hover:text-white transition-colors ${user.language === 'ar' ? 'rotate-180' : ''}`} />
+            </button>
+            <div className="flex flex-col items-center">
+                <div className="flex items-center gap-2 mb-1">
+                    <BrainCircuit className="text-purple-500 animate-pulse w-5 h-5" />
+                    <h2 className="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-fuchsia-400 to-indigo-400 tracking-[0.2em] font-mono uppercase shadow-purple-500/50 drop-shadow-sm">
+                        {t('title')}
+                    </h2>
+                </div>
+                <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-purple-500/50 to-transparent"></div>
+                <p className="text-[9px] text-purple-300/60 font-mono tracking-widest mt-1 uppercase">{t('subtitle')}</p>
+            </div>
+            <div className="w-10" />
+        </div>
+
+        {!result ? (
+            <div className="relative z-10 animate-in fade-in zoom-in duration-700">
+                {/* Input Card */}
+                <div className="bg-[#050505]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-1 shadow-[0_0_50px_rgba(0,0,0,0.5)] relative group overflow-hidden">
+                    
+                    {/* Animated Border Gradient */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 via-transparent to-indigo-600/20 opacity-50 group-hover:opacity-100 transition-opacity duration-1000"></div>
+                    
+                    <div className="relative bg-[#0A0A0A] rounded-[2.3rem] p-6 overflow-hidden">
+                        
+                        {/* HUD Status Bar */}
+                        <div className="flex justify-between items-center gap-0 mb-8 p-1 rounded-2xl bg-[#000000] border border-white/10 relative z-10 shadow-inner">
+                            {/* Spending */}
+                            <div className="flex-1 flex flex-col items-center py-3 border-r border-white/5 relative group/hud">
+                                <span className="text-[8px] text-zinc-600 uppercase tracking-[0.2em] mb-1 flex items-center gap-1 group-hover/hud:text-purple-400 transition-colors">
+                                    <Wallet size={8} /> {t('wallet')}
+                                </span>
+                                <span className="text-white font-bold font-mono text-xs tabular-nums tracking-wide">{user.currentBalance.toLocaleString()}</span>
+                                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-[1px] bg-purple-500/50 opacity-0 group-hover/hud:opacity-100 transition-opacity"></div>
+                            </div>
+                            
+                            {/* Savings */}
+                            <div className="flex-1 flex flex-col items-center py-3 border-r border-white/5 relative group/hud">
+                                    <span className="text-[8px] text-zinc-600 uppercase tracking-[0.2em] mb-1 flex items-center gap-1 group-hover/hud:text-sber-green transition-colors">
+                                        <PiggyBank size={8} /> {t('savings')}
+                                    </span>
+                                    <span className="text-sber-green font-bold font-mono text-xs tabular-nums tracking-wide">{user.savingsBalance.toLocaleString()}</span>
+                                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-[1px] bg-sber-green/50 opacity-0 group-hover/hud:opacity-100 transition-opacity"></div>
+                            </div>
+                            
+                            {/* Bills */}
+                            <div className="flex-1 flex flex-col items-center py-3 relative group/hud">
+                                    <span className="text-[8px] text-zinc-600 uppercase tracking-[0.2em] mb-1 flex items-center gap-1 group-hover/hud:text-red-400 transition-colors">
+                                        <Receipt size={8} /> {t('bills')}
+                                    </span>
+                                    <span className="text-red-400 font-bold font-mono text-xs tabular-nums tracking-wide">-{totalBills.toLocaleString()}</span>
+                                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-[1px] bg-red-500/50 opacity-0 group-hover/hud:opacity-100 transition-opacity"></div>
+                            </div>
+                        </div>
+
+                        <div className="text-center mb-6">
+                            <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-[0.3em] mb-2">{t('desire')}</h3>
+                            <div className="w-12 h-1 bg-purple-900/30 mx-auto rounded-full overflow-hidden">
+                                <div className="h-full bg-purple-500 w-1/3 animate-shimmer"></div>
+                            </div>
+                        </div>
+                        
+                        {/* Scan Button */}
+                        <button 
+                            onClick={() => fileInputRef.current?.click()}
+                            className="w-full mb-6 py-5 rounded-2xl bg-[#111] border border-white/5 flex items-center justify-center gap-3 text-zinc-400 hover:text-purple-300 hover:border-purple-500/30 hover:bg-[#151515] hover:shadow-[0_0_20px_rgba(168,85,247,0.1)] transition-all group/scan relative z-10 overflow-hidden"
+                        >
+                            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5"></div>
+                            {scanning ? (
+                                <div className="flex items-center gap-2">
+                                    <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                                    <span className="text-xs font-mono uppercase tracking-widest animate-pulse">{t('scanning')}</span>
+                                </div>
+                            ) : (
+                                <>
+                                    <ScanLine size={18} className="group-hover/scan:text-purple-400 transition-colors" />
+                                    <span className="font-bold text-xs tracking-[0.2em] uppercase">{t('scanBtn')}</span>
+                                </>
+                            )}
+                        </button>
+                        <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleScanImage} />
+
+                        <div className="space-y-5 relative z-10">
+                            <div className="group/input">
+                                <label className="text-[9px] text-zinc-600 uppercase font-bold tracking-[0.2em] mx-2 mb-1.5 block group-focus-within/input:text-purple-400 transition-colors">{t('itemName')}</label>
+                                <div className="relative">
+                                    <input 
+                                        type="text" 
+                                        value={item}
+                                        onChange={e => setItem(e.target.value)}
+                                        placeholder={t('itemPlaceholder')}
+                                        className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-white placeholder-zinc-800 focus:border-purple-500 focus:shadow-[0_0_25px_rgba(168,85,247,0.2)] focus:bg-purple-900/5 outline-none transition-all font-medium"
+                                    />
+                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-white/5 group-focus-within/input:bg-purple-500 transition-colors shadow-[0_0_10px_currentColor]"></div>
+                                </div>
+                            </div>
+
+                            <div className="group/input">
+                                <label className="text-[9px] text-zinc-600 uppercase font-bold tracking-[0.2em] mx-2 mb-1.5 block group-focus-within/input:text-purple-400 transition-colors">{t('price')} ({user.currency})</label>
+                                <div className="relative">
+                                    <input 
+                                        type="number" 
+                                        value={price}
+                                        onChange={e => setPrice(e.target.value)}
+                                        placeholder="0.00"
+                                        className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-2xl font-bold text-white placeholder-zinc-800 focus:border-purple-500 focus:shadow-[0_0_25px_rgba(168,85,247,0.2)] focus:bg-purple-900/5 outline-none transition-all font-mono"
+                                    />
+                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-700 font-mono text-xs">{user.currency}</div>
+                                </div>
+                            </div>
+
+                            <button 
+                                onClick={handleSimulate}
+                                disabled={!item || !price || loading}
+                                className="relative w-full h-16 mt-4 rounded-xl overflow-hidden group/btn disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <div className="absolute inset-0 bg-gradient-to-r from-purple-700 via-indigo-600 to-purple-700 bg-[length:200%_100%] animate-gradient-x group-hover/btn:brightness-125 transition-all"></div>
+                                <div className="absolute inset-0 flex items-center justify-center gap-3">
+                                    {loading ? (
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            <span className="font-bold text-xs uppercase tracking-[0.2em] animate-pulse">{t('collapsing')}</span>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <Zap className="fill-white w-5 h-5 group-hover/btn:scale-110 transition-transform" />
+                                            <span className="font-black text-sm tracking-[0.2em] uppercase">{t('simulate')}</span>
+                                        </>
+                                    )}
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        ) : (
+            <div className="space-y-6 animate-in slide-in-from-bottom-10 fade-in duration-700 pb-10">
+                
+                {/* 1. Life Energy Card (Sci-Fi Module) */}
+                <div className="relative bg-[#09090b] border border-purple-500/30 rounded-[2rem] p-6 overflow-hidden shadow-[0_0_40px_rgba(168,85,247,0.15)] group">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-purple-600/10 rounded-full blur-[50px] pointer-events-none"></div>
+                    <div className="absolute bottom-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-purple-500 to-transparent opacity-50"></div>
+                    
+                    <div className="flex items-start justify-between relative z-10">
+                        <div>
+                            <h4 className="text-[10px] font-bold text-purple-400 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+                                <Activity size={12} className="animate-pulse" /> {t('lifeEnergy')}
+                            </h4>
+                            <div className="flex items-baseline gap-3">
+                                <span className="text-5xl font-black text-white tabular-nums tracking-tighter drop-shadow-lg">{result.lifeEnergy.hoursOfWork.toFixed(1)}</span>
+                                <span className="text-xs text-zinc-500 font-bold uppercase tracking-widest">{t('hours')}</span>
+                            </div>
+                            <div className="mt-4 p-3 bg-purple-500/10 border-l-2 border-purple-500 rounded-r-lg">
+                                <p className="text-xs text-purple-200 italic leading-relaxed">
+                                    "{result.lifeEnergy.sacrifice}"
+                                </p>
+                            </div>
+                        </div>
+                        <div className="relative">
+                            <div className="w-14 h-14 rounded-full border border-purple-500/30 flex items-center justify-center bg-black shadow-[0_0_20px_rgba(168,85,247,0.2)]">
+                                <Clock className="text-purple-400" size={24} />
+                            </div>
+                            <div className="absolute -inset-1 border border-purple-500/20 rounded-full animate-ping opacity-20"></div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 2. Multiverse Chart (Holographic) */}
+                <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-[2rem] p-6 shadow-2xl relative overflow-hidden">
+                    <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+                    
+                    <div className="flex items-center justify-between mb-6 relative z-10">
+                        <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                            <Cpu size={12} /> {t('trajectories')}
+                        </h4>
+                        <div className="flex gap-2">
+                             <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></div>
+                             <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                             <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                        </div>
+                    </div>
+                    
+                    <div className="h-[220px] w-full -ml-2 relative z-10" dir="ltr">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={chartData}>
+                                <defs>
+                                    <linearGradient id="colorCollapse" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#EF4444" stopOpacity={0.4}/>
+                                        <stop offset="95%" stopColor="#EF4444" stopOpacity={0}/>
+                                    </linearGradient>
+                                    <linearGradient id="colorWarrior" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#EAB308" stopOpacity={0.4}/>
+                                        <stop offset="95%" stopColor="#EAB308" stopOpacity={0}/>
+                                    </linearGradient>
+                                    <linearGradient id="colorWealth" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#22C55E" stopOpacity={0.4}/>
+                                        <stop offset="95%" stopColor="#22C55E" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
+                                <XAxis dataKey="date" stroke="#444" tick={{fontSize: 9, fontFamily: 'monospace'}} tickLine={false} axisLine={false} dy={10} />
+                                <YAxis stroke="#444" tick={{fontSize: 9, fontFamily: 'monospace'}} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} />
+                                <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.2)', strokeWidth: 1 }} />
+                                
+                                <Area type="monotone" dataKey="Collapse" stroke="#EF4444" strokeWidth={2} fillOpacity={1} fill="url(#colorCollapse)" activeDot={{r: 4, strokeWidth: 0, fill: '#fff'}} />
+                                <Area type="monotone" dataKey="Warrior" stroke="#EAB308" strokeWidth={2} fillOpacity={1} fill="url(#colorWarrior)" activeDot={{r: 4, strokeWidth: 0, fill: '#fff'}} />
+                                <Area type="monotone" dataKey="Wealth" stroke="#22C55E" strokeWidth={2} fillOpacity={1} fill="url(#colorWealth)" activeDot={{r: 4, strokeWidth: 0, fill: '#fff'}} />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
+
+                    {/* Chart Legend */}
+                    <div className="grid grid-cols-3 gap-2 mt-6 relative z-10" dir="ltr">
+                        {[
+                            { label: 'Collapse', color: 'bg-red-500', text: 'text-red-500' },
+                            { label: 'Warrior', color: 'bg-yellow-500', text: 'text-yellow-500' },
+                            { label: 'Wealth', color: 'bg-green-500', text: 'text-green-500' }
+                        ].map(item => (
+                            <div key={item.label} className="bg-white/5 border border-white/5 rounded-lg p-2 flex flex-col items-center">
+                                <div className={`w-1.5 h-1.5 rounded-full ${item.color} mb-1 shadow-[0_0_8px_currentColor]`}></div>
+                                <span className={`text-[9px] font-bold uppercase tracking-wider ${item.text}`}>{item.label}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* 3. Risks & Verdict */}
+                <div className="grid grid-cols-1 gap-4">
+                    {/* Risks Module */}
+                    {result.risks.length > 0 && (
+                        <div className="bg-red-950/20 border border-red-500/30 rounded-[1.5rem] p-5 relative overflow-hidden">
+                            <div className="absolute -right-4 -top-4 w-20 h-20 bg-red-600/10 rounded-full blur-xl"></div>
+                            <h4 className="text-red-500 font-bold text-xs uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                                <ShieldAlert size={14} /> {t('risks')}
+                            </h4>
+                            <div className="space-y-3">
+                                {result.risks.map((risk, idx) => (
+                                    <div key={idx} className="flex items-start gap-3 bg-red-500/5 p-3 rounded-xl border border-red-500/10">
+                                        <AlertTriangle size={14} className="mt-0.5 shrink-0 text-red-500" />
+                                        <div>
+                                            <p className="text-xs text-red-200 font-bold leading-snug">{risk.message}</p>
+                                            <p className="text-[10px] text-red-400/60 font-mono mt-1">DETECTED AT: {risk.date}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* AI Verdict (Terminal Style) */}
+                    <div className="bg-gradient-to-r from-indigo-950/40 to-purple-950/40 border border-indigo-500/30 rounded-[1.5rem] p-6 relative overflow-hidden shadow-lg">
+                         <div className="absolute top-0 right-0 p-4 opacity-10 animate-pulse">
+                             <Sparkles size={60} />
+                         </div>
+                         <h4 className="text-indigo-300 font-bold text-[9px] uppercase tracking-[0.3em] mb-3 border-b border-indigo-500/20 pb-2 inline-block">
+                             {t('verdict')}
+                         </h4>
+                         <p className="text-lg font-bold text-white leading-snug font-mono">
+                             <span className="text-indigo-400 mr-2">{">"}</span>
+                             "{result.aiVerdict}"
+                             <span className="inline-block w-2 h-4 bg-indigo-500 ml-1 animate-pulse"></span>
+                         </p>
+                    </div>
+                </div>
+
+                <button 
+                    onClick={() => { setResult(null); setItem(''); setPrice(''); }}
+                    className="w-full py-4 rounded-xl border border-white/10 text-zinc-500 hover:text-white hover:bg-white/5 transition-all text-xs font-bold uppercase tracking-[0.2em] flex items-center justify-center gap-2 group"
+                >
+                    <ChevronLeft size={14} className="group-hover:-translate-x-1 transition-transform" /> {t('newSim')}
+                </button>
+            </div>
+        )}
     </div>
   );
 };
@@ -3191,46 +3709,43 @@ interface Props {
 }
 
 export const TransactionItem: React.FC<Props> = ({ transaction, currency, language }) => {
-  // Find category or default
   const category = CATEGORIES.find(c => c.id === transaction.category) || CATEGORIES.find(c => c.id === 'general') || CATEGORIES[0];
-  
-  // Resolve Icon dynamically
   const IconComponent = (Icons as any)[category.icon] || Icons.HelpCircle;
-
   const isExpense = transaction.type === 'expense';
   const categoryName = language === 'ar' ? category.name_ar : language === 'ru' ? category.name_ru : category.name_en;
   
   return (
-    <div className="group relative bg-[#121214] hover:bg-[#1C1C1E] border border-white/5 hover:border-white/10 rounded-[1.5rem] p-4 flex items-center justify-between transition-all duration-300 active:scale-95 shadow-sm">
+    <div className="group relative glass hover:bg-white/5 border border-white/5 hover:border-white/10 rounded-[1.8rem] p-4 flex items-center justify-between transition-all duration-300 active:scale-95 shadow-sm hover:shadow-lg overflow-hidden">
       
+      {/* Holographic shimmer on hover */}
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-[200%] group-hover:translate-x-[200%] transition-transform duration-1000 ease-in-out pointer-events-none skew-x-12"></div>
+
       {/* Left Side: Icon & Info */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 relative z-10">
         {/* Glowing Icon Container */}
         <div 
-            className="w-12 h-12 rounded-2xl flex items-center justify-center relative overflow-hidden transition-transform group-hover:scale-110 duration-300"
+            className="w-14 h-14 rounded-2xl flex items-center justify-center relative overflow-hidden transition-transform group-hover:scale-105 duration-500 border border-white/5"
             style={{ 
-                backgroundColor: `${category.color}15`, // 15 = hex opacity
-                boxShadow: `0 0 15px -5px ${category.color}40` // Glow effect
+                backgroundColor: `${category.color}10`,
+                boxShadow: `0 0 25px -5px ${category.color}20`
             }}
         >
-            <IconComponent size={20} style={{ color: category.color }} strokeWidth={2.5} />
-            
-            {/* Inner light reflection */}
-            <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="absolute inset-0 opacity-20 blur-lg" style={{ backgroundColor: category.color }}></div>
+            <IconComponent size={22} style={{ color: category.color }} strokeWidth={2.5} className="relative z-10 drop-shadow-md" />
         </div>
         
         {/* Text Details */}
-        <div className="flex flex-col">
-            <h3 className="font-bold text-white text-base leading-tight mb-1">
+        <div className="flex flex-col gap-1.5">
+            <h3 className="font-bold text-white text-base leading-none tracking-wide group-hover:text-white/90 transition-colors">
               {transaction.vendor || categoryName}
             </h3>
             <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-zinc-400 bg-white/5 px-2 py-0.5 rounded-md border border-white/5 group-hover:border-white/10 transition-colors">
+                <span className="text-[10px] font-bold text-zinc-400 bg-black/40 px-2.5 py-1 rounded-lg border border-white/5 backdrop-blur-sm">
                     {categoryName}
                 </span>
                 {transaction.note && (
-                    <span className="text-[10px] text-zinc-600 truncate max-w-[100px] border-l border-white/10 pl-2">
-                        {transaction.note}
+                    <span className="text-[10px] text-zinc-500 truncate max-w-[100px] sm:max-w-[150px]">
+                        • {transaction.note}
                     </span>
                 )}
             </div>
@@ -3238,11 +3753,11 @@ export const TransactionItem: React.FC<Props> = ({ transaction, currency, langua
       </div>
 
       {/* Right Side: Amount */}
-      <div className="text-right">
-        <div className={`font-bold text-lg tabular-nums tracking-tight ${isExpense ? 'text-white' : 'text-emerald-400'}`}>
+      <div className="text-right relative z-10">
+        <div className={`font-bold text-lg tabular-nums tracking-tight drop-shadow-md ${isExpense ? 'text-white' : 'text-sber-green'}`}>
             {isExpense ? '-' : '+'}{transaction.amount.toLocaleString()} 
         </div>
-        <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest opacity-60">
+        <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
             {currency}
         </div>
       </div>
@@ -3255,7 +3770,7 @@ export const TransactionItem: React.FC<Props> = ({ transaction, currency, langua
 ### File: `components\TransactionsPage.tsx`
 ```tsx
 import React, { useState } from 'react';
-import { List, Search, X, Filter, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { List, Search, X, Filter, ArrowDownLeft, ArrowUpRight, Calendar } from 'lucide-react';
 import { Transaction, UserSettings, TransactionType } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { TransactionItem } from './TransactionItem';
@@ -3305,10 +3820,10 @@ export const TransactionsPage: React.FC<Props> = ({ user, transactions }) => {
   const FilterChip = ({ type, label, icon: Icon }: { type: FilterType, label: string, icon?: any }) => (
       <button
         onClick={() => setFilterType(type)}
-        className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all active:scale-95 border ${
+        className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold transition-all active:scale-95 border ${
             filterType === type 
-            ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.2)]' 
-            : 'bg-zinc-900/50 text-gray-400 border-zinc-800 hover:border-zinc-600 hover:bg-zinc-800'
+            ? 'bg-white text-black border-white shadow-[0_0_20px_rgba(255,255,255,0.3)]' 
+            : 'glass text-zinc-400 border-transparent hover:bg-white/10 hover:text-white'
         }`}
       >
         {Icon && <Icon size={14} />}
@@ -3317,38 +3832,38 @@ export const TransactionsPage: React.FC<Props> = ({ user, transactions }) => {
   );
 
   return (
-    <div className="pb-24 min-h-[80vh]">
+    <div className="pb-32 min-h-[80vh]">
       
       {/* Sticky Header Area */}
-      <div className="sticky top-0 z-30 bg-[#050505]/95 backdrop-blur-xl pb-4 pt-2 -mx-6 px-6 border-b border-white/5 transition-all">
-          <div className="flex flex-col gap-4">
+      <div className="sticky top-0 z-30 glass border-b border-white/5 pb-4 pt-2 -mx-6 px-6 transition-all shadow-lg backdrop-blur-xl">
+          <div className="flex flex-col gap-4 animate-slide-down">
               {/* Title */}
               <div className="flex items-center justify-between">
                  <div className="flex items-center gap-3">
-                    <div className="bg-sber-green/10 p-3 rounded-2xl border border-sber-green/20">
+                    <div className="bg-sber-green/10 p-3 rounded-2xl border border-sber-green/20 shadow-[0_0_15px_rgba(33,160,56,0.15)]">
                         <List className="w-6 h-6 text-sber-green" />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-bold text-white leading-none">{t.transactions}</h2>
-                        <p className="text-xs text-gray-400 mt-1">{filteredData.length} records</p>
+                        <h2 className="text-2xl font-bold text-white leading-none tracking-tight">{t.transactions}</h2>
+                        <p className="text-xs text-zinc-500 mt-1 font-medium">{filteredData.length} records found</p>
                     </div>
                  </div>
               </div>
 
               {/* Search Bar */}
               <div className="relative group">
-                 <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                    <Search className="w-5 h-5 text-gray-500 group-focus-within:text-sber-green transition-colors" />
+                 <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                    <Search className="w-5 h-5 text-zinc-500 group-focus-within:text-white transition-colors" />
                  </div>
                  <input 
                     type="text" 
                     placeholder={user.language === 'ar' ? "ابحث عن متجر، ملاحظة..." : "Search merchant, notes..."}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full bg-[#1C1C1E] border border-white/5 rounded-2xl py-3 pl-10 pr-10 text-white focus:outline-none focus:border-sber-green/50 transition-all placeholder-zinc-600 shadow-sm"
+                    className="w-full bg-[#0A0A0A] border border-white/10 rounded-2xl py-3.5 pl-12 pr-10 text-white focus:outline-none focus:border-white/30 focus:shadow-[0_0_20px_rgba(255,255,255,0.05)] transition-all placeholder-zinc-700 shadow-inner"
                  />
                  {searchTerm && (
-                     <button onClick={() => setSearchTerm('')} className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-white">
+                     <button onClick={() => setSearchTerm('')} className="absolute inset-y-0 right-4 flex items-center text-zinc-500 hover:text-white transition-colors">
                          <X className="w-4 h-4" />
                      </button>
                  )}
@@ -3365,46 +3880,56 @@ export const TransactionsPage: React.FC<Props> = ({ user, transactions }) => {
 
       {/* Stats Summary (Conditional) */}
       {(searchTerm || filterType !== 'all') && (
-        <div className="grid grid-cols-2 gap-3 mt-4 mb-6 animate-in fade-in slide-in-from-top-2">
-            <div className="bg-[#1C1C1E] p-4 rounded-2xl border border-white/5 relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-2 opacity-10"><ArrowDownLeft size={40} /></div>
-                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Total Income</p>
-                <p className="text-sber-green font-bold text-lg tabular-nums">
-                    +{filteredData.filter(t => t.type === 'income').reduce((s,t) => s + t.amount, 0).toLocaleString()}
-                </p>
+        <div className="grid grid-cols-2 gap-3 mt-4 mb-6 animate-scale-in">
+            <div className="glass-panel p-4 rounded-[1.5rem] relative overflow-hidden group">
+                <div className="absolute -right-4 -top-4 w-20 h-20 bg-sber-green/20 rounded-full blur-xl group-hover:bg-sber-green/30 transition-colors"></div>
+                <div className="relative z-10">
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1">Total Income</p>
+                    <p className="text-sber-green font-bold text-xl tabular-nums drop-shadow-[0_0_10px_rgba(33,160,56,0.4)]">
+                        +{filteredData.filter(t => t.type === 'income').reduce((s,t) => s + t.amount, 0).toLocaleString()}
+                    </p>
+                </div>
             </div>
-            <div className="bg-[#1C1C1E] p-4 rounded-2xl border border-white/5 relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-2 opacity-10"><ArrowUpRight size={40} /></div>
-                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Total Expense</p>
-                <p className="text-white font-bold text-lg tabular-nums">
-                    -{filteredData.filter(t => t.type === 'expense').reduce((s,t) => s + t.amount, 0).toLocaleString()}
-                </p>
+            <div className="glass-panel p-4 rounded-[1.5rem] relative overflow-hidden group">
+                <div className="absolute -right-4 -top-4 w-20 h-20 bg-red-500/20 rounded-full blur-xl group-hover:bg-red-500/30 transition-colors"></div>
+                <div className="relative z-10">
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1">Total Expense</p>
+                    <p className="text-white font-bold text-xl tabular-nums">
+                        -{filteredData.filter(t => t.type === 'expense').reduce((s,t) => s + t.amount, 0).toLocaleString()}
+                    </p>
+                </div>
             </div>
         </div>
       )}
       
       {/* Transactions List */}
-      <div className="mt-4">
-        {getGroupedTransactions().map((group, idx) => {
+      <div className="mt-4 space-y-8">
+        {getGroupedTransactions().map((group, groupIdx) => {
             const date = new Date(group.date);
             return (
-            <div key={group.date} className="mb-6 animate-in slide-in-from-bottom-5 fade-in" style={{animationDelay: `${idx * 50}ms`}}>
-                <div className="flex items-center gap-3 mb-3 pl-1">
-                    <span className="text-xl font-bold text-white tracking-tighter tabular-nums bg-white/10 w-10 h-10 flex items-center justify-center rounded-xl border border-white/5">
+            <div key={group.date} className="animate-slide-up" style={{ animationDelay: `${groupIdx * 0.1}s` }}>
+                {/* Date Header */}
+                <div className="flex items-center gap-3 mb-4 pl-2 sticky top-48 z-0 opacity-80">
+                    <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white font-bold shadow-sm">
                         {date.getDate()}
-                    </span>
+                    </div>
                     <div className="flex flex-col">
-                        <span className="text-xs text-gray-400 font-bold uppercase tracking-widest">
+                        <span className="text-xs text-white font-bold uppercase tracking-widest">
                             {date.toLocaleDateString(user.language, { month: 'long' })}
                         </span>
-                        <span className="text-[10px] text-gray-600 font-bold uppercase">
+                        <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wide">
                             {date.toLocaleDateString(user.language, { weekday: 'long' })}
                         </span>
                     </div>
+                    <div className="h-[1px] flex-1 bg-gradient-to-r from-white/10 to-transparent ml-2"></div>
                 </div>
+
+                {/* Items */}
                 <div className="space-y-3">
-                {group.items.map(tx => (
-                    <TransactionItem key={tx.id} transaction={tx} currency={user.currency} language={user.language} />
+                {group.items.map((tx, itemIdx) => (
+                    <div key={tx.id} className="animate-slide-up" style={{ animationDelay: `${(groupIdx * 0.1) + (itemIdx * 0.05)}s` }}>
+                        <TransactionItem transaction={tx} currency={user.currency} language={user.language} />
+                    </div>
                 ))}
                 </div>
             </div>
@@ -3414,12 +3939,12 @@ export const TransactionsPage: React.FC<Props> = ({ user, transactions }) => {
       
       {/* Empty State */}
       {filteredData.length === 0 && (
-         <div className="flex flex-col items-center justify-center py-20 text-gray-500 opacity-50">
-             <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-4 border border-white/5 border-dashed">
-                <Search size={32} strokeWidth={1.5} />
+         <div className="flex flex-col items-center justify-center py-24 text-zinc-600 animate-scale-in">
+             <div className="w-24 h-24 bg-white/5 rounded-[2rem] flex items-center justify-center mb-6 border border-white/5 border-dashed">
+                <Search size={40} strokeWidth={1.5} className="opacity-50" />
              </div>
-             <p className="text-sm font-medium">No transactions found.</p>
-             <p className="text-xs text-gray-600 mt-1">Try adjusting your filters.</p>
+             <p className="text-base font-bold text-zinc-500">No transactions found</p>
+             <p className="text-xs text-zinc-700 mt-2">Adjust filters or add a new one.</p>
          </div>
       )}
     </div>
@@ -3452,7 +3977,7 @@ export const TransactionsPage: React.FC<Props> = ({ user, transactions }) => {
 ```ts
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, reauthenticateWithPopup } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { UserSettings, Transaction } from "../types";
 
@@ -3484,6 +4009,19 @@ export const signInWithGoogle = async () => {
     return result.user;
   } catch (error) {
     console.error("Error signing in with Google", error);
+    throw error;
+  }
+};
+
+export const reauthenticateUser = async () => {
+  try {
+    if (auth.currentUser) {
+      await reauthenticateWithPopup(auth.currentUser, googleProvider);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error("Re-authentication failed", error);
     throw error;
   }
 };
@@ -3833,6 +4371,211 @@ export const analyzeReceipt = async (
 ```
 ---
 
+### File: `services\titanService.ts`
+```ts
+import { GoogleGenAI } from "@google/genai";
+import { Transaction, UserSettings, TitanAnalysis } from "../types";
+
+const cleanJson = (text: string) => {
+  return text.replace(/```json/g, '').replace(/```/g, '').trim();
+};
+
+// Helper for image processing
+const fileToGenerativePart = async (file: File) => {
+  return new Promise<{ inlineData: { data: string; mimeType: string } }>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      const base64Data = base64String.split(',')[1];
+      resolve({
+        inlineData: {
+          data: base64Data,
+          mimeType: file.type,
+        },
+      });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
+
+// --- 1. Vision: Extract Item & Price ---
+export const extractItemFromImage = async (
+  file: File,
+  apiKey: string
+): Promise<{ name: string; price: number }> => {
+  if (!apiKey) throw new Error("API Key missing");
+
+  const ai = new GoogleGenAI({ apiKey });
+  const imagePart = await fileToGenerativePart(file);
+
+  const prompt = `
+    Analyze this image (price tag, product page, or receipt).
+    Extract:
+    1. Item Name (short and concise, e.g., "Sony Headphones").
+    2. Price (numeric value only, ignore currency symbol).
+
+    Return STRICT JSON: { "name": "string", "price": number }
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: { parts: [imagePart, { text: prompt }] },
+    });
+    return JSON.parse(cleanJson(response.text || '{}'));
+  } catch (error) {
+    console.error("Titan Vision Error:", error);
+    throw new Error("Failed to scan image.");
+  }
+};
+
+// --- 2. Titan Core: Multiverse Analysis ---
+export const analyzeMultiverse = async (
+  user: UserSettings,
+  history: Transaction[],
+  itemName: string,
+  itemPrice: number
+): Promise<TitanAnalysis> => {
+  if (!user.apiKey) throw new Error("API Key missing");
+  
+  const ai = new GoogleGenAI({ apiKey: user.apiKey });
+
+  // 1. Analyze Real Habits (Not Assumptions)
+  const expenseStats: Record<string, number> = {};
+  history.filter(t => t.type === 'expense').forEach(t => {
+      const key = t.vendor ? t.vendor : t.category;
+      expenseStats[key] = (expenseStats[key] || 0) + t.amount;
+  });
+  
+  // Get top 3 money leaks
+  const topHabits = Object.entries(expenseStats)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 3)
+      .map(([name, amount]) => `${name} (${amount})`)
+      .join(', ');
+
+  // 2. Prepare Financial Context
+  const today = new Date().toISOString().split('T')[0];
+  const monthlyBills = user.recurringBills?.reduce((sum, b) => sum + b.amount, 0) || 0;
+  
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const spendingHistory = history
+    .filter(t => t.type === 'expense' && new Date(t.date) >= thirtyDaysAgo)
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const context = {
+    spendingBalance: user.currentBalance, // Spending Wallet
+    savingsBalance: user.savingsBalance, // Savings Wallet (Added)
+    currency: user.currency,
+    salary: user.lastSalaryAmount || 0,
+    salaryDate: user.nextSalaryDate || "Unknown",
+    monthlyFixedBills: monthlyBills,
+    avgMonthlySpending: spendingHistory,
+    topHabits: topHabits || "General Spending", 
+    itemToBuy: itemName,
+    itemPrice: itemPrice,
+    today: today,
+    language: user.language
+  };
+
+  const prompt = `
+    Act as a "Titan Financial Simulator". I want to simulate the impact of buying "${itemName}" for ${itemPrice} ${user.currency}.
+    
+    Context: ${JSON.stringify(context)}
+    
+    CRITICAL INSTRUCTIONS:
+    1. **Language**: The output JSON values MUST be in ${user.language === 'ar' ? 'Arabic' : user.language === 'ru' ? 'Russian' : 'English'}.
+    2. **Habits**: Use "topHabits" (${context.topHabits}) for specific sacrifice suggestions.
+    3. **Wallets Logic**: 
+       - User has "Spending Wallet" (${context.spendingBalance}) and "Savings Wallet" (${context.savingsBalance}).
+       - If 'itemPrice' > 'spendingBalance', the purchase implies **dipping into SAVINGS**. This is a major risk. Mention it in "Risks" and "The Collapse" description.
+       - In "Wealth" scenario, simulate adding 'itemPrice' TO the existing 'savingsBalance' to show total potential growth (Compound interest effect on the total nest egg).
+    
+    Task: Generate a JSON report with 3 distinct timelines (3 months projection) and life energy analysis.
+
+    1. **Scenario 1: Collapse (Red)**
+       - User buys the item NOW.
+       - If spending balance drops below 0, show it dropping into negative or indicate Savings depletion.
+       - Event Label: "Savings Breach ⚠️" if savings are touched.
+    
+    2. **Scenario 2: Warrior (Yellow)**
+       - User buys the item NOW.
+       - But adopts "Austerity Mode" to recover the spent amount without touching savings if possible.
+    
+    3. **Scenario 3: Wealth (Green)**
+       - User DOES NOT buy.
+       - User invests this amount + keeps existing savings.
+       - Show the trajectory of TOTAL Savings (${context.savingsBalance} + ${itemPrice}) growing over 3 months.
+
+    4. **Life Energy**:
+       - Calculate hours of work based on salary (${context.salary}). 
+       - Suggest a SPECIFIC sacrifice based on "topHabits".
+
+    5. **Risks**:
+       - Will buying this cause missing a bill? (Bills total: ${monthlyBills}).
+       - Will this break the savings lock?
+
+    Return STRICT JSON matching this interface:
+    {
+      "scenarios": [
+        { 
+            "id": "collapse", 
+            "name": "Name in User Lang", 
+            "description": "Description in User Lang (Mention savings breach if applicable)", 
+            "color": "#EF4444", 
+            "finalBalance": number,
+            "timeline": [{"date": "YYYY-MM-DD", "balance": number, "event": string | null}] 
+        },
+        { 
+            "id": "warrior", 
+            "name": "Name in User Lang", 
+            "description": "Description in User Lang", 
+            "color": "#EAB308", 
+            "finalBalance": number,
+            "timeline": [...] 
+        },
+        { 
+            "id": "wealth", 
+            "name": "Name in User Lang", 
+            "description": "Description in User Lang", 
+            "color": "#22C55E", 
+            "finalBalance": number,
+            "timeline": [...] 
+        }
+      ],
+      "risks": [
+        { "billName": string, "date": string, "severity": "high"|"critical", "message": "Message in User Lang" }
+      ],
+      "lifeEnergy": {
+        "hoursOfWork": number,
+        "daysOfLife": number,
+        "sacrifice": "Sacrifice Advice in User Lang"
+      },
+      "aiVerdict": "Short advice in User Lang (max 20 words)."
+    }
+
+    Generate 10-15 timeline points per scenario.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: { parts: [{ text: prompt }] },
+    });
+
+    const text = response.text || "{}";
+    return JSON.parse(cleanJson(text)) as TitanAnalysis;
+    
+  } catch (error) {
+    console.error("Titan Service Error:", error);
+    throw new Error("Titan Simulation Failed.");
+  }
+};
+```
+---
+
 ### File: `.env.local`
 ```local
 GEMINI_API_KEY=PLACEHOLDER_API_KEY
@@ -3843,7 +4586,7 @@ GEMINI_API_KEY=PLACEHOLDER_API_KEY
 ### File: `App.tsx`
 ```tsx
 import React, { useState, useEffect } from 'react';
-import { Globe } from 'lucide-react';
+import { Globe, BrainCircuit } from 'lucide-react';
 import { UserSettings, Transaction, ViewState, TransactionType, BudgetPlan, RecurringBill, WalletType } from './types';
 import { TRANSLATIONS } from './constants';
 import { OnboardingAnalysisResult } from './services/geminiService';
@@ -3858,6 +4601,7 @@ import { TransactionsPage } from './components/TransactionsPage';
 import { AddTransactionPage } from './components/AddTransactionPage';
 import { SettingsPage } from './components/SettingsPage';
 import { Navigation } from './components/Navigation';
+import { TitanSimulator } from './components/TitanSimulator';
 
 const App = () => {
   // --- State ---
@@ -4145,38 +4889,60 @@ const App = () => {
   }
 
   return (
-    // Updated padding-bottom to pb-40 to prevent bottom nav from covering content
-    <div className="min-h-screen bg-[#050505] text-white relative overflow-hidden font-sans selection:bg-sber-green/30 pb-40">
-      <div className="fixed inset-0 z-0 pointer-events-none bg-[#050505]">
-          <div className="absolute top-[-20%] left-[-20%] w-[80vw] h-[80vw] bg-sber-green/5 rounded-full blur-[150px] opacity-30 animate-pulse-slow"></div>
-          <div className="absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-emerald-900/10 rounded-full blur-[120px] opacity-20"></div>
+    // Updated Main Container with Nebula Background
+    <div className="min-h-screen bg-black text-white relative overflow-hidden font-sans selection:bg-purple-500/30 pb-40">
+      
+      {/* Animated Nebula Background */}
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-[-10%] left-[-20%] w-[80vw] h-[80vw] bg-purple-900/20 rounded-full blur-[120px] animate-float opacity-30"></div>
+          <div className="absolute bottom-[-10%] right-[-20%] w-[80vw] h-[80vw] bg-emerald-900/20 rounded-full blur-[120px] animate-pulse-slow opacity-30" style={{ animationDelay: '2s' }}></div>
+          <div className="absolute top-[40%] left-[30%] w-[40vw] h-[40vw] bg-blue-900/10 rounded-full blur-[100px] animate-float opacity-20" style={{ animationDelay: '4s' }}></div>
+          <div className="noise-bg"></div>
       </div>
 
       {currentView !== 'add' && (
-        <div className="sticky top-0 z-40 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5 shadow-sm transition-all duration-300">
+        <div className="sticky top-0 z-40 glass border-b border-white/5 shadow-lg transition-all duration-300">
           <div className="max-w-md mx-auto px-6 py-4 flex items-center justify-between">
+            {/* User Profile */}
             <div className="flex items-center gap-3">
               {user.photoURL ? (
-                  <img src={user.photoURL} alt="User" className="w-10 h-10 rounded-2xl shadow-lg shadow-black/50 object-cover border border-white/10" />
+                  <img src={user.photoURL} alt="User" className="w-10 h-10 rounded-2xl shadow-md border border-white/10 object-cover" />
               ) : (
-                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-zinc-800 to-zinc-700 flex items-center justify-center text-sm font-bold shadow-lg shadow-black/50 border border-white/10">
+                  <div className="w-10 h-10 rounded-2xl bg-surfaceLight flex items-center justify-center text-sm font-bold shadow-md border border-white/10">
                   {user.name.charAt(0) || 'U'}
                   </div>
               )}
               <div className="flex flex-col">
-                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-none mb-1">{t.welcome}</p>
+                <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest leading-none mb-1">{t.welcome}</p>
                 <div className="flex items-center gap-2">
                   <p className="font-bold text-base tracking-wide text-white leading-none">{user.name.split(' ')[0]}</p>
                   {user.isGuest && <span className="text-[9px] bg-yellow-500/10 text-yellow-500 px-1.5 py-0.5 rounded border border-yellow-500/20 font-bold">GUEST</span>}
                 </div>
               </div>
             </div>
-            <button 
-                onClick={() => setUser(u => ({...u, language: u.language === 'en' ? 'ar' : u.language === 'ar' ? 'ru' : 'en'}))}
-                className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 active:scale-90 transition-all border border-white/5 group"
-            >
-              <Globe className="text-gray-400 group-hover:text-white w-5 h-5 transition-colors" />
-            </button>
+
+            {/* Right Side Actions */}
+            <div className="flex items-center gap-3">
+                {/* Titan Simulator Capsule */}
+                <button 
+                  onClick={() => setCurrentView('simulator')}
+                  className="relative group flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1A1A1A] border border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.3)] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)] hover:border-purple-500 transition-all active:scale-95 overflow-hidden"
+                >
+                    {/* Glowing Pulse Background */}
+                    <div className="absolute inset-0 bg-purple-600/10 animate-pulse"></div>
+                    
+                    <BrainCircuit size={16} className="text-purple-400 group-hover:text-purple-300 transition-colors relative z-10" />
+                    <span className="text-[10px] font-bold text-purple-200 uppercase tracking-wider relative z-10 hidden sm:block">Titan</span>
+                </button>
+
+                {/* Language Switcher */}
+                <button 
+                    onClick={() => setUser(u => ({...u, language: u.language === 'en' ? 'ar' : u.language === 'ar' ? 'ru' : 'en'}))}
+                    className="w-10 h-10 flex items-center justify-center rounded-full glass hover:bg-white/10 active:scale-90 transition-all group"
+                >
+                  <Globe className="text-zinc-400 group-hover:text-white w-5 h-5 transition-colors" />
+                </button>
+            </div>
           </div>
         </div>
       )}
@@ -4220,6 +4986,15 @@ const App = () => {
 
           {currentView === 'ai-advisor' && (
             <AIAdvisor user={user} transactions={transactions} onClose={() => setCurrentView('dashboard')} />
+          )}
+
+          {/* New Titan Simulator View */}
+          {currentView === 'simulator' && (
+            <TitanSimulator 
+              user={user} 
+              transactions={transactions} 
+              onBack={() => setCurrentView('dashboard')} 
+            />
           )}
         </div>
       </main>
@@ -4530,47 +5305,83 @@ declare module '@google/genai';
     <title>Masareefy</title>
     
     <!-- PWA Settings -->
-    <link rel="manifest" href="/manifest.json">
     <link rel="icon" type="image/png" href="/app.png">
     <link rel="apple-touch-icon" href="/app.png">
 
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+Arabic:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         darkMode: 'class',
         theme: {
           extend: {
             colors: {
-              sber: {
-                green: '#21A038',
-                dark: '#0B0C0B',
-                card: '#1C1C1E',
-                accent: '#4ADE80',
-                gray: '#2C2C2E'
-              }
+              background: '#000000',
+              surface: '#09090b',
+              surfaceLight: '#18181b',
+              border: '#27272a',
+              primary: '#21A038', 
+              primaryGlow: 'rgba(33, 160, 56, 0.5)',
+              titan: '#A855F7',
+              titanGlow: 'rgba(168, 85, 247, 0.5)',
             },
             fontFamily: {
               sans: ['Inter', 'Noto Sans Arabic', 'sans-serif'],
             },
             animation: {
-              'enter': 'enter 0.6s cubic-bezier(0.2, 0.8, 0.2, 1)',
-              'leave': 'leave 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)',
-              'scale-in': 'scaleIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
-              'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'enter': 'enter 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+              'leave': 'leave 0.3s ease-in forwards',
+              'slide-up': 'slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
+              'slide-down': 'slideDown 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
+              'fade-in': 'fadeIn 0.4s ease-out',
+              'scale-in': 'scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+              'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'float': 'float 6s ease-in-out infinite',
+              'gradient-x': 'gradientX 15s ease infinite',
+              'shimmer': 'shimmer 2.5s linear infinite',
             },
             keyframes: {
               enter: {
-                '0%': { opacity: '0', transform: 'translateY(20px) scale(0.98)' },
-                '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
+                '0%': { opacity: '0', transform: 'scale(0.98) translateY(10px)' },
+                '100%': { opacity: '1', transform: 'scale(1) translateY(0)' },
               },
               leave: {
                 '0%': { opacity: '1', transform: 'scale(1)' },
-                '100%': { opacity: '0', transform: 'scale(0.98)' },
+                '100%': { opacity: '0', transform: 'scale(0.98) translateY(10px)' },
+              },
+              slideUp: {
+                '0%': { opacity: '0', transform: 'translateY(30px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+              slideDown: {
+                '0%': { opacity: '0', transform: 'translateY(-30px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
               },
               scaleIn: {
                 '0%': { transform: 'scale(0.9)', opacity: '0' },
                 '100%': { transform: 'scale(1)', opacity: '1' },
+              },
+              float: {
+                '0%, 100%': { transform: 'translateY(0)' },
+                '50%': { transform: 'translateY(-10px)' },
+              },
+              gradientX: {
+                '0%, 100%': {
+                    'background-size': '200% 200%',
+                    'background-position': 'left center'
+                },
+                '50%': {
+                    'background-size': '200% 200%',
+                    'background-position': 'right center'
+                },
+              },
+              shimmer: {
+                '0%': { backgroundPosition: '-1000px 0' },
+                '100%': { backgroundPosition: '1000px 0' }
               }
             }
           }
@@ -4579,17 +5390,50 @@ declare module '@google/genai';
     </script>
     <style>
       body {
-        background-color: #050505;
-        color: #FFFFFF;
+        background-color: #000000;
+        color: #ffffff;
         font-family: 'Inter', 'Noto Sans Arabic', sans-serif;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
-        overscroll-behavior-y: none; /* Prevent bounce effect on mobile */
+        overscroll-behavior-y: none;
       }
-      /* Hide scrollbar for clean UI */
+      
+      /* Hide Scrollbar */
       ::-webkit-scrollbar {
         width: 0px;
         background: transparent;
+      }
+      
+      /* Glassmorphism Utilities */
+      .glass {
+        background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      
+      .glass-strong {
+        background: rgba(24, 24, 27, 0.6);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .glass-panel {
+        background: linear-gradient(180deg, rgba(30, 30, 32, 0.7) 0%, rgba(10, 10, 10, 0.9) 100%);
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+      }
+
+      /* Noise Texture Class */
+      .noise-bg {
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        opacity: 0.03;
+        pointer-events: none;
+        position: absolute;
+        inset: 0;
+        mix-blend-mode: overlay;
       }
     </style>
   <script type="importmap">
@@ -4679,10 +5523,10 @@ root.render(
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "vite": "^6.2.0",
+    "vite-plugin-pwa": "^0.21.1"
   }
 }
-
 ```
 ---
 
@@ -4832,7 +5676,44 @@ export interface ExpenseCategory {
   color: string;
 }
 
-export type ViewState = 'dashboard' | 'transactions' | 'add' | 'reports' | 'settings' | 'onboarding' | 'ai-advisor';
+// --- Titan Simulator Types ---
+
+export interface TimelinePoint {
+  date: string;
+  balance: number;
+  event?: string; // e.g., "Salary", "Rent", "Collapse"
+}
+
+export interface TitanScenario {
+  id: 'collapse' | 'warrior' | 'wealth';
+  name: string;
+  description: string;
+  color: string;
+  timeline: TimelinePoint[];
+  finalBalance: number;
+}
+
+export interface RiskAlert {
+  billName: string;
+  date: string;
+  severity: 'high' | 'critical';
+  message: string;
+}
+
+export interface LifeEnergy {
+  hoursOfWork: number;
+  daysOfLife: number; // e.g. 0.5 days
+  sacrifice: string; // e.g. "30 cups of coffee"
+}
+
+export interface TitanAnalysis {
+  scenarios: TitanScenario[];
+  risks: RiskAlert[];
+  lifeEnergy: LifeEnergy;
+  aiVerdict: string; // The final advice
+}
+
+export type ViewState = 'dashboard' | 'transactions' | 'add' | 'reports' | 'settings' | 'onboarding' | 'ai-advisor' | 'simulator';
 ```
 ---
 
@@ -4841,6 +5722,7 @@ export type ViewState = 'dashboard' | 'transactions' | 'add' | 'reports' | 'sett
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
@@ -4849,7 +5731,42 @@ export default defineConfig(({ mode }) => {
         port: 3000,
         host: '0.0.0.0',
       },
-      plugins: [react()],
+      plugins: [
+        react(),
+        VitePWA({
+          registerType: 'autoUpdate',
+          includeAssets: ['app.png'],
+          manifest: {
+            short_name: "Masareefy",
+            name: "Masareefy: Smart Finance",
+            description: "Smart income and expense manager with AI receipt analysis.",
+            theme_color: "#000000",
+            background_color: "#000000",
+            display: "standalone",
+            orientation: "portrait",
+            scope: "/",
+            start_url: "/",
+            icons: [
+              {
+                src: "/app.png",
+                sizes: "192x192",
+                type: "image/png",
+                purpose: "any maskable"
+              },
+              {
+                src: "/app.png",
+                sizes: "512x512",
+                type: "image/png",
+                purpose: "any maskable"
+              }
+            ]
+          },
+          workbox: {
+            globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+            maximumFileSizeToCacheInBytes: 4000000
+          }
+        })
+      ],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.FIREBASE_API_KEY': JSON.stringify(env.FIREBASE_API_KEY),
@@ -4870,6 +5787,6 @@ export default defineConfig(({ mode }) => {
 ---
 
 ## 📊 Stats
-- Total Files: 26
-- Total Characters: 220732
-- Estimated Tokens: ~55.183 (GPT-4 Context)
+- Total Files: 28
+- Total Characters: 278330
+- Estimated Tokens: ~69.583 (GPT-4 Context)

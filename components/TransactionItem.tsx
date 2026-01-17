@@ -10,46 +10,43 @@ interface Props {
 }
 
 export const TransactionItem: React.FC<Props> = ({ transaction, currency, language }) => {
-  // Find category or default
   const category = CATEGORIES.find(c => c.id === transaction.category) || CATEGORIES.find(c => c.id === 'general') || CATEGORIES[0];
-  
-  // Resolve Icon dynamically
   const IconComponent = (Icons as any)[category.icon] || Icons.HelpCircle;
-
   const isExpense = transaction.type === 'expense';
   const categoryName = language === 'ar' ? category.name_ar : language === 'ru' ? category.name_ru : category.name_en;
   
   return (
-    <div className="group relative bg-[#121214] hover:bg-[#1C1C1E] border border-white/5 hover:border-white/10 rounded-[1.5rem] p-4 flex items-center justify-between transition-all duration-300 active:scale-95 shadow-sm">
+    <div className="group relative glass hover:bg-white/5 border border-white/5 hover:border-white/10 rounded-[1.8rem] p-4 flex items-center justify-between transition-all duration-300 active:scale-95 shadow-sm hover:shadow-lg overflow-hidden">
       
+      {/* Holographic shimmer on hover */}
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-[200%] group-hover:translate-x-[200%] transition-transform duration-1000 ease-in-out pointer-events-none skew-x-12"></div>
+
       {/* Left Side: Icon & Info */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 relative z-10">
         {/* Glowing Icon Container */}
         <div 
-            className="w-12 h-12 rounded-2xl flex items-center justify-center relative overflow-hidden transition-transform group-hover:scale-110 duration-300"
+            className="w-14 h-14 rounded-2xl flex items-center justify-center relative overflow-hidden transition-transform group-hover:scale-105 duration-500 border border-white/5"
             style={{ 
-                backgroundColor: `${category.color}15`, // 15 = hex opacity
-                boxShadow: `0 0 15px -5px ${category.color}40` // Glow effect
+                backgroundColor: `${category.color}10`,
+                boxShadow: `0 0 25px -5px ${category.color}20`
             }}
         >
-            <IconComponent size={20} style={{ color: category.color }} strokeWidth={2.5} />
-            
-            {/* Inner light reflection */}
-            <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="absolute inset-0 opacity-20 blur-lg" style={{ backgroundColor: category.color }}></div>
+            <IconComponent size={22} style={{ color: category.color }} strokeWidth={2.5} className="relative z-10 drop-shadow-md" />
         </div>
         
         {/* Text Details */}
-        <div className="flex flex-col">
-            <h3 className="font-bold text-white text-base leading-tight mb-1">
+        <div className="flex flex-col gap-1.5">
+            <h3 className="font-bold text-white text-base leading-none tracking-wide group-hover:text-white/90 transition-colors">
               {transaction.vendor || categoryName}
             </h3>
             <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-zinc-400 bg-white/5 px-2 py-0.5 rounded-md border border-white/5 group-hover:border-white/10 transition-colors">
+                <span className="text-[10px] font-bold text-zinc-400 bg-black/40 px-2.5 py-1 rounded-lg border border-white/5 backdrop-blur-sm">
                     {categoryName}
                 </span>
                 {transaction.note && (
-                    <span className="text-[10px] text-zinc-600 truncate max-w-[100px] border-l border-white/10 pl-2">
-                        {transaction.note}
+                    <span className="text-[10px] text-zinc-500 truncate max-w-[100px] sm:max-w-[150px]">
+                        • {transaction.note}
                     </span>
                 )}
             </div>
@@ -57,11 +54,11 @@ export const TransactionItem: React.FC<Props> = ({ transaction, currency, langua
       </div>
 
       {/* Right Side: Amount */}
-      <div className="text-right">
-        <div className={`font-bold text-lg tabular-nums tracking-tight ${isExpense ? 'text-white' : 'text-emerald-400'}`}>
+      <div className="text-right relative z-10">
+        <div className={`font-bold text-lg tabular-nums tracking-tight drop-shadow-md ${isExpense ? 'text-white' : 'text-sber-green'}`}>
             {isExpense ? '-' : '+'}{transaction.amount.toLocaleString()} 
         </div>
-        <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest opacity-60">
+        <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
             {currency}
         </div>
       </div>
