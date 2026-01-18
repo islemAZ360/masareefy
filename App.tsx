@@ -33,7 +33,9 @@ const App = () => {
   const [user, setUser] = useState<UserSettings>(() => {
     try {
       const saved = localStorage.getItem('masareefy_user');
-      return saved ? JSON.parse(saved) : {
+      const parsed = saved ? JSON.parse(saved) : null;
+      
+      const defaultSettings: UserSettings = {
         name: '',
         apiKey: '',
         currency: 'USD',
@@ -49,8 +51,18 @@ const App = () => {
         savingsBankColor: '#21A038',
         savingsTextColor: '#FFFFFF',
         lastSalaryDate: undefined,
-        salaryInterval: 30
+        salaryInterval: 30,
+        // New Features Initialization
+        savingsGoals: [],
+        debts: []
       };
+
+      if (parsed) {
+          // Merge parsed data with defaults to ensure new fields (goals, debts) exist for old users
+          return { ...defaultSettings, ...parsed };
+      }
+      return defaultSettings;
+
     } catch (e) {
       return {
         name: '',
@@ -68,7 +80,9 @@ const App = () => {
         savingsBankColor: '#21A038',
         savingsTextColor: '#FFFFFF',
         lastSalaryDate: undefined,
-        salaryInterval: 30
+        salaryInterval: 30,
+        savingsGoals: [],
+        debts: []
       };
     }
   });
@@ -171,7 +185,9 @@ const App = () => {
       lastSalaryAmount: result.lastSalary.amount,
       lastSalaryDate: result.lastSalary.date,
       nextSalaryDate: nextSalaryDate,
-      recurringBills: bills
+      recurringBills: bills,
+      savingsGoals: [],
+      debts: []
     };
 
     setTransactions(newTransactions);
@@ -309,10 +325,21 @@ const App = () => {
     setCurrentView('dashboard');
   };
 
+  if (currentView === 'onboarding') {
+    return <Onboarding user={user} setUser={setUser} onComplete={handleOnboardingComplete} onRestore={handleRestoreData} />;
+  }
+
   return (
     // Clean, transparent container allowing global Aurora background to shine through
     <div className="min-h-screen bg-transparent text-white relative overflow-hidden font-sans selection:bg-primary/30 pb-40">
       
+      {/* Animated Nebula Background (Moved from index.html/App structure for persistence) */}
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-[-10%] left-[-20%] w-[80vw] h-[80vw] bg-purple-900/10 rounded-full blur-[120px] animate-float opacity-30"></div>
+          <div className="absolute bottom-[-10%] right-[-20%] w-[80vw] h-[80vw] bg-emerald-900/10 rounded-full blur-[120px] animate-pulse-slow opacity-30" style={{ animationDelay: '2s' }}></div>
+          <div className="noise-bg"></div>
+      </div>
+
       {/* Header */}
       {currentView !== 'add' && (
         <div className="sticky top-0 z-40 glass-card border-b border-white/5 shadow-lg transition-all duration-300 rounded-b-3xl mx-2 mt-2">

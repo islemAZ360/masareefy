@@ -38,6 +38,29 @@ export interface RecurringBill {
   lastPaidDate?: string; // ISO Date string
 }
 
+// --- New Features Types ---
+
+export interface SavingsGoal {
+  id: string;
+  name: string;
+  targetAmount: number;
+  savedAmount: number;
+  deadline?: string;
+  color: string;
+  icon: string;
+}
+
+export interface DebtRecord {
+  id: string;
+  person: string; // Name of person
+  amount: number;
+  type: 'lent' | 'borrowed'; // 'lent': I gave money (Asset), 'borrowed': I took money (Liability)
+  date: string;
+  dueDate?: string;
+  isPaid: boolean;
+  note?: string;
+}
+
 export interface UserSettings {
   name: string;
   email?: string;
@@ -71,6 +94,10 @@ export interface UserSettings {
   selectedPlan?: PlanType;
   dailyLimit?: number;
   recurringBills?: RecurringBill[];
+  
+  // Advanced Features (New)
+  savingsGoals?: SavingsGoal[];
+  debts?: DebtRecord[];
 }
 
 export interface ExpenseCategory {
