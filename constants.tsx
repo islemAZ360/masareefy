@@ -2,35 +2,35 @@ import { ExpenseCategory } from './types';
 import { ShoppingCart, Utensils, Car, Home, Zap, HeartPulse, GraduationCap, Plane, Gift, Briefcase, Clapperboard, ShoppingBag, Smile, Repeat, Banknote, ArrowRightLeft, LayoutGrid } from 'lucide-react';
 
 export const CATEGORIES: ExpenseCategory[] = [
-  { id: 'food', name_en: 'Food & Dining', name_ar: 'طعام ومطاعم', name_ru: 'Еда и напитки', icon: 'Utensils', color: '#FF9500' },
-  { id: 'groceries', name_en: 'Groceries', name_ar: 'بقالة / سوبرماركت', name_ru: 'Продукты', icon: 'ShoppingCart', color: '#30D158' },
-  { id: 'transport', name_en: 'Transport', name_ar: 'نقل ومواصلات', name_ru: 'Транспорт', icon: 'Car', color: '#0A84FF' },
-  { id: 'housing', name_en: 'Housing', name_ar: 'سكن / إيجار', name_ru: 'Жилье', icon: 'Home', color: '#BF5AF2' },
-  { id: 'utilities', name_en: 'Utilities', name_ar: 'فواتير وخدمات', name_ru: 'Коммунальные', icon: 'Zap', color: '#FFD60A' },
-  { id: 'health', name_en: 'Health', name_ar: 'صحة وعلاج', name_ru: 'Здоровье', icon: 'HeartPulse', color: '#FF375F' },
-  { id: 'education', name_en: 'Education', name_ar: 'تعليم', name_ru: 'Образование', icon: 'GraduationCap', color: '#64D2FF' },
-  { id: 'travel', name_en: 'Travel', name_ar: 'سفر وسياحة', name_ru: 'Путешествия', icon: 'Plane', color: '#5E5CE6' },
-  { id: 'entertainment', name_en: 'Entertainment', name_ar: 'ترفيه وتسلية', name_ru: 'Развлечения', icon: 'Clapperboard', color: '#FF2D55' },
-  { id: 'shopping', name_en: 'Shopping', name_ar: 'تسوق وملابس', name_ru: 'Шопинг', icon: 'ShoppingBag', color: '#FF9F0A' },
-  { id: 'personal_care', name_en: 'Personal Care', name_ar: 'عناية شخصية', name_ru: 'Личный уход', icon: 'Smile', color: '#E4A4C3' },
-  { id: 'subscriptions', name_en: 'Subscriptions', name_ar: 'اشتراكات', name_ru: 'Подписки', icon: 'Repeat', color: '#AC8E68' },
-  { id: 'debt', name_en: 'Loans & Debt', name_ar: 'قروض وديون', name_ru: 'Кредиты', icon: 'Banknote', color: '#8E8E93' },
-  { id: 'gifts', name_en: 'Gifts & Charity', name_ar: 'هدايا وتبرعات', name_ru: 'Подарки', icon: 'Gift', color: '#FF453A' },
-  { id: 'salary', name_en: 'Salary / Income', name_ar: 'راتب / دخل', name_ru: 'Зарплата', icon: 'Briefcase', color: '#21A038' },
-  { id: 'transfer', name_en: 'Transfer', name_ar: 'تحويلات مالية', name_ru: 'Переводы', icon: 'ArrowRightLeft', color: '#8E8E93' },
-  { id: 'general', name_en: 'General / Other', name_ar: 'عام / أخرى', name_ru: 'Разное', icon: 'LayoutGrid', color: '#9CA3AF' },
+  { id: 'food', name_en: 'Food & Dining', name_ar: 'طعام ومطاعم', name_ru: 'Еда и напитки', icon: 'Utensils', color: '#FF9F1C' }, // Neon Orange
+  { id: 'groceries', name_en: 'Groceries', name_ar: 'بقالة / سوبرماركت', name_ru: 'Продукты', icon: 'ShoppingCart', color: '#2EC4B6' }, // Neon Teal
+  { id: 'transport', name_en: 'Transport', name_ar: 'نقل ومواصلات', name_ru: 'Транспорт', icon: 'Car', color: '#3A86FF' }, // Neon Blue
+  { id: 'housing', name_en: 'Housing', name_ar: 'سكن / إيجار', name_ru: 'Жилье', icon: 'Home', color: '#8338EC' }, // Electric Purple
+  { id: 'utilities', name_en: 'Utilities', name_ar: 'فواتير وخدمات', name_ru: 'Коммунальные', icon: 'Zap', color: '#FFBD00' }, // Neon Yellow
+  { id: 'health', name_en: 'Health', name_ar: 'صحة وعلاج', name_ru: 'Здоровье', icon: 'HeartPulse', color: '#FF006E' }, // Neon Pink
+  { id: 'education', name_en: 'Education', name_ar: 'تعليم', name_ru: 'Образование', icon: 'GraduationCap', color: '#4CC9F0' }, // Bright Sky
+  { id: 'travel', name_en: 'Travel', name_ar: 'سفر وسياحة', name_ru: 'Путешествия', icon: 'Plane', color: '#7209B7' }, // Deep Neon Purple
+  { id: 'entertainment', name_en: 'Entertainment', name_ar: 'ترفيه وتسلية', name_ru: 'Развлечения', icon: 'Clapperboard', color: '#F72585' }, // Neon Magenta
+  { id: 'shopping', name_en: 'Shopping', name_ar: 'تسوق وملابس', name_ru: 'Шопинг', icon: 'ShoppingBag', color: '#F15BB5' }, // Bubblegum Pink
+  { id: 'personal_care', name_en: 'Personal Care', name_ar: 'عناية شخصية', name_ru: 'Личный уход', icon: 'Smile', color: '#9B5DE5' }, // Light Purple
+  { id: 'subscriptions', name_en: 'Subscriptions', name_ar: 'اشتراكات', name_ru: 'Подписки', icon: 'Repeat', color: '#00BBF9' }, // Azure
+  { id: 'debt', name_en: 'Loans & Debt', name_ar: 'قروض وديون', name_ru: 'Кредиты', icon: 'Banknote', color: '#EF476F' }, // Coral
+  { id: 'gifts', name_en: 'Gifts & Charity', name_ar: 'هدايا وتبرعات', name_ru: 'Подарки', icon: 'Gift', color: '#FF5400' }, // Safety Orange
+  { id: 'salary', name_en: 'Salary / Income', name_ar: 'راتب / دخل', name_ru: 'Зарплата', icon: 'Briefcase', color: '#06D6A0' }, // Neon Mint
+  { id: 'transfer', name_en: 'Transfer', name_ar: 'تحويلات مالية', name_ru: 'Переводы', icon: 'ArrowRightLeft', color: '#118AB2' }, // Blue
+  { id: 'general', name_en: 'General / Other', name_ar: 'عام / أخرى', name_ru: 'Разное', icon: 'LayoutGrid', color: '#9CA3AF' }, // Gray
 ];
 
 export const RUSSIAN_BANKS = [
   { id: 'sber', name: 'Sberbank', color: '#21A038', textColor: '#FFFFFF', logo: '/banks/sber.png' },
   { id: 'tinkoff', name: 'T-Bank', color: '#FFDD2D', textColor: '#000000', logo: '/banks/Tinkif.png' },
-  { id: 'alpha', name: 'Alfa-Bank', color: '#EF3124', textColor: '#FFFFFF', logo: '/banks/alpha.png' },
-  { id: 'vtb', name: 'VTB', color: '#002882', textColor: '#FFFFFF', logo: '/banks/vtb.png' },
-  { id: 'gazprom', name: 'Gazprombank', color: '#00468C', textColor: '#FFFFFF', logo: '/banks/gazprom.png' },
+  { id: 'alpha', name: 'Alfa-Bank', color: '#FF453A', textColor: '#FFFFFF', logo: '/banks/alpha.png' }, // Brighter Red
+  { id: 'vtb', name: 'VTB', color: '#2F80ED', textColor: '#FFFFFF', logo: '/banks/vtb.png' }, // Brighter Blue
+  { id: 'gazprom', name: 'Gazprombank', color: '#007AFF', textColor: '#FFFFFF', logo: '/banks/gazprom.png' }, // Brighter Blue
   { id: 'ozon', name: 'Ozon Bank', color: '#005BFF', textColor: '#FFFFFF', logo: '/banks/ozon.png' },
-  { id: 'wb', name: 'Wildberries', color: '#CB11AB', textColor: '#FFFFFF', logo: '/banks/wildberries.png' },
-  { id: 'psb', name: 'PSB', color: '#F26722', textColor: '#FFFFFF', logo: '/banks/psb.png' },
-  { id: 'spb', name: 'Bank St. Petersburg', color: '#D22630', textColor: '#FFFFFF', logo: '/banks/sankt.png' },
+  { id: 'wb', name: 'Wildberries', color: '#E01E84', textColor: '#FFFFFF', logo: '/banks/wildberries.png' }, // Brighter Purple
+  { id: 'psb', name: 'PSB', color: '#FF6B00', textColor: '#FFFFFF', logo: '/banks/psb.png' }, // Brighter Orange
+  { id: 'spb', name: 'Bank St. Petersburg', color: '#FF3B30', textColor: '#FFFFFF', logo: '/banks/sankt.png' }, // Red
   { id: 'other', name: 'Custom Bank', color: '#1C1C1E', textColor: '#FFFFFF', logo: null },
 ];
 

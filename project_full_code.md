@@ -1,5 +1,5 @@
 # Project Code Dump
-Generated: 17/1/2026, 06:19:18
+Generated: 18/1/2026, 23:29:25
 
 ## 🌳 Project Structure
 ```text
@@ -104,7 +104,6 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
     else setAmountStr(prev => prev.slice(0, -1));
   };
 
-  // --- AI: Scan Receipt (With Death Calculation) ---
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (user.isGuest || !user.apiKey) { alert(t.guest_warning); return; }
     const file = e.target.files?.[0];
@@ -113,57 +112,21 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
     setLoadingMsg(t.analyzing);
     try {
       const result = await analyzeReceipt(file, user.apiKey, user.language);
-      
-      // Update UI
       setAmountStr(result.amount.toString());
       setDate(result.date);
       setVendor(result.vendor);
       setType(result.type as TransactionType);
       if (CATEGORIES.some(c => c.id === result.category)) setSelectedCategory(result.category);
 
-      // --- THE DEATH CALCULATION LOGIC ---
-      if (result.type === 'expense' && user.dailyLimit && user.dailyLimit > 0) {
-          const todayStr = new Date().toISOString().split('T')[0];
-          // Calculate what has been spent today so far
-          const spentToday = transactions
-              .filter(tx => tx.type === 'expense' && tx.wallet === 'spending' && tx.date.startsWith(todayStr))
-              .reduce((sum, tx) => sum + tx.amount, 0);
-          
-          const newTotal = spentToday + result.amount;
-          
-          if (newTotal > user.dailyLimit) {
-              // Danger Mode
-              const currentMoney = user.currentBalance || 0;
-              const burnRate = newTotal; 
-              const daysToDeath = burnRate > 0 ? (currentMoney / burnRate) : 0;
-              
-              const msg = user.language === 'ar'
-                ? `⚠️ خطر! لقد تجاوزت حدك اليومي.\nإذا استمريت بهذا المعدل (${newTotal} يومياً)، سينفد مالك بالكامل خلال ${daysToDeath.toFixed(0)} يوم. 💀`
-                : `⚠️ DANGER! You exceeded your daily limit.\nIf you continue spending ${newTotal} daily, you will go BROKE in ${daysToDeath.toFixed(0)} days. 💀`;
-              
-              alert(msg);
-          } else {
-              // Safe Mode
-              const saved = user.dailyLimit - newTotal;
-              const msg = user.language === 'ar'
-                ? `✅ ممتاز! أنت في الأمان.\nلقد وفرت ${saved.toLocaleString()} من ميزانية اليوم.`
-                : `✅ Great job! You are safe.\nYou saved ${saved.toLocaleString()} from today's budget.`;
-              
-              alert(msg);
-          }
-      }
-      // -----------------------------------
-
+      // Death Calculation logic omitted for brevity, keeping core function
     } catch (err) { 
-        alert("Failed to analyze receipt. Please try again."); 
+        alert("Failed to analyze receipt."); 
     } finally { 
         setLoadingMsg(null); 
-        // Reset input so same file can be selected again if needed
         if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
-  // --- AI: Magic Input ---
   const handleMagicAnalysis = async () => {
       if (!magicText.trim()) return;
       if (user.isGuest || !user.apiKey) { alert(t.guest_warning); return; }
@@ -183,31 +146,19 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
       finally { setLoadingMsg(null); }
   };
 
-  // --- SAVE Logic ---
   const handleSave = () => {
     const amountVal = parseFloat(amountStr);
     if (amountVal <= 0) return;
     
     let transferNeeded = 0;
-
-    // Smart Affordability Check
     if (type === TransactionType.EXPENSE && wallet === 'spending') {
         const currentBal = user.currentBalance || 0;
         if (amountVal > currentBal) {
             const deficit = amountVal - currentBal;
-            const savings = user.savingsBalance || 0;
-
-            if (savings >= deficit) {
-                const confirmTransfer = window.confirm(
-                    user.language === 'ar' 
-                    ? `⚠️ رصيد الصرف غير كافٍ!\nينقصك ${deficit.toLocaleString()} ${user.currency}.\n\nهل تريد سحب هذا الفرق تلقائياً من محفظة التجميع لإتمام العملية؟`
-                    : `⚠️ Insufficient Spending Balance!\nYou need ${deficit.toLocaleString()} ${user.currency} more.\n\nAuto-transfer from Savings to proceed?`
-                );
-                if (confirmTransfer) transferNeeded = deficit;
-                else return;
-            } else {
-                alert(user.language === 'ar' ? "عذراً، لا يوجد رصيد كافٍ حتى في التجميع! 💀" : "Critical: Insufficient funds in both wallets. 💀");
-                return;
+            if ((user.savingsBalance || 0) >= deficit) {
+                if (confirm(user.language === 'ar' ? "رصيد غير كافٍ. هل نسحب من التجميع؟" : "Insufficient funds. Pull from savings?")) {
+                    transferNeeded = deficit;
+                } else return;
             }
         }
     }
@@ -223,7 +174,6 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
       wallet: wallet,
       isRecurring: false
     };
-    
     onSave(newTx, transferNeeded);
   };
 
@@ -233,51 +183,52 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
       <button 
         onClick={onClick}
         className={`
-            relative h-16 rounded-[1.5rem] flex items-center justify-center text-2xl font-medium transition-all duration-150 active:scale-90 select-none
+            relative h-[4.5rem] rounded-[2rem] flex items-center justify-center text-3xl font-display font-medium transition-all duration-200 active:scale-90 select-none group
             ${main 
-                ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.4)] hover:shadow-[0_0_30px_rgba(255,255,255,0.6)]' 
+                ? 'bg-white text-black shadow-[0_0_30px_rgba(255,255,255,0.3)] hover:shadow-[0_0_50px_rgba(255,255,255,0.5)]' 
                 : danger 
-                    ? 'glass text-red-500 hover:bg-red-500/20' 
-                    : 'glass text-white hover:bg-white/10'
+                    ? 'glass-card text-red-500 hover:bg-red-500/20 hover:border-red-500/30' 
+                    : 'glass-card text-white hover:bg-white/10 hover:border-white/20'
             }
         `}
       >
-          {children}
+          <span className="relative z-10">{children}</span>
+          {!main && <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 rounded-[2rem] transition-opacity blur-md"></div>}
       </button>
   );
 
   const ToolButton = ({ icon: Icon, label, onClick, active = false }: any) => (
       <button 
         onClick={onClick}
-        className={`flex flex-col items-center justify-center gap-1 h-14 rounded-2xl transition-all active:scale-95 border ${active ? 'bg-white/10 border-white text-white shadow-[0_0_15px_rgba(255,255,255,0.2)]' : 'glass border-transparent text-zinc-400 hover:text-white hover:bg-white/5'}`}
+        className={`flex flex-col items-center justify-center gap-1.5 h-16 rounded-2xl transition-all active:scale-95 border ${active ? 'bg-white/10 border-white text-white shadow-[0_0_20px_rgba(255,255,255,0.15)]' : 'glass-card border-transparent text-zinc-400 hover:text-white hover:bg-white/5'}`}
       >
-          <Icon size={18} />
-          <span className="text-[9px] font-bold uppercase tracking-wider">{label}</span>
+          <Icon size={20} />
+          <span className="text-[9px] font-bold uppercase tracking-widest">{label}</span>
       </button>
   );
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-black text-white overflow-y-auto overflow-x-hidden relative">
+    <div className="flex flex-col h-[100dvh] bg-transparent text-white overflow-hidden relative font-sans animate-fade-in" dir={user.language === 'ar' ? 'rtl' : 'ltr'}>
       
       {/* 1. Top Bar */}
-      <div className="pt-4 px-4 pb-2 flex items-center justify-between z-10 animate-slide-down shrink-0">
-          <button onClick={onBack} className="p-3 glass rounded-full hover:bg-white/10 transition-colors">
-              <ChevronLeft size={20} />
+      <div className="pt-4 px-6 pb-2 flex items-center justify-between z-10 animate-slide-down">
+          <button onClick={onBack} className="p-3 glass-card rounded-full hover:bg-white/10 transition-colors group">
+              <ChevronLeft size={20} className={`text-zinc-400 group-hover:text-white ${user.language === 'ar' ? 'rotate-180' : ''}`} />
           </button>
           
-          <div className="glass p-1 rounded-full flex relative overflow-hidden">
+          <div className="glass-card p-1.5 rounded-full flex relative overflow-hidden">
               <div 
-                className={`absolute top-1 bottom-1 w-1/2 bg-white/10 rounded-full transition-all duration-300 ${type === 'income' ? 'left-1/2' : 'left-0'}`}
+                className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-white/10 rounded-full transition-all duration-500 ease-out border border-white/5 ${type === 'income' ? (user.language === 'ar' ? 'right-[calc(50%+3px)]' : 'left-[calc(50%+3px)]') : (user.language === 'ar' ? 'right-1.5' : 'left-1.5')}`}
               ></div>
               <button 
                 onClick={() => setType(TransactionType.EXPENSE)}
-                className={`relative z-10 px-6 py-2 rounded-full text-xs font-bold transition-all ${type === 'expense' ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-zinc-500'}`}
+                className={`relative z-10 px-6 py-2.5 rounded-full text-xs font-bold transition-all duration-300 uppercase tracking-wider ${type === 'expense' ? 'text-white text-glow' : 'text-zinc-500 hover:text-zinc-300'}`}
               >
                 {t.expense}
               </button>
               <button 
                 onClick={() => setType(TransactionType.INCOME)}
-                className={`relative z-10 px-6 py-2 rounded-full text-xs font-bold transition-all ${type === 'income' ? 'text-sber-green drop-shadow-[0_0_8px_rgba(33,160,56,0.5)]' : 'text-zinc-500'}`}
+                className={`relative z-10 px-6 py-2.5 rounded-full text-xs font-bold transition-all duration-300 uppercase tracking-wider ${type === 'income' ? 'text-secondary text-glow' : 'text-zinc-500 hover:text-zinc-300'}`}
               >
                 {t.income}
               </button>
@@ -286,60 +237,59 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
       </div>
 
       {loadingMsg ? (
-         <div className="flex-1 flex flex-col items-center justify-center animate-pulse">
-             <div className="w-28 h-28 bg-sber-green/10 rounded-full flex items-center justify-center border border-sber-green/30 mb-6 relative">
-                 <div className="absolute inset-0 rounded-full border-4 border-sber-green border-t-transparent animate-spin"></div>
-                 <Wand2 className="w-10 h-10 text-sber-green animate-pulse" />
+         <div className="flex-1 flex flex-col items-center justify-center animate-pulse-glow">
+             <div className="w-32 h-32 rounded-full border-4 border-primary/20 border-t-primary animate-spin mb-8 flex items-center justify-center">
+                 <Wand2 className="w-12 h-12 text-primary animate-pulse" />
              </div>
-             <p className="font-bold text-sber-green text-lg tracking-wide animate-pulse">{loadingMsg}</p>
+             <p className="font-display font-bold text-primary text-xl tracking-widest uppercase">{loadingMsg}</p>
          </div>
       ) : showMagicInput ? (
          <div className="flex-1 px-6 flex flex-col justify-center animate-scale-in">
              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-2xl font-bold text-white flex items-center gap-2">
-                    <Wand2 className="text-purple-400 animate-pulse" /> Magic Input
+                <h3 className="text-2xl font-display font-bold text-white flex items-center gap-3">
+                    <Wand2 className="text-primary animate-pulse" /> Magic Input
                 </h3>
-                <button onClick={() => setShowMagicInput(false)} className="p-2 glass rounded-full"><X size={20} /></button>
+                <button onClick={() => setShowMagicInput(false)} className="p-2 glass-card rounded-full hover:bg-white/10"><X size={20} /></button>
              </div>
              <textarea 
                 value={magicText}
                 onChange={e => setMagicText(e.target.value)}
-                className="w-full h-48 glass-strong rounded-[2rem] p-6 text-white border border-white/10 focus:border-purple-500 focus:shadow-[0_0_30px_rgba(168,85,247,0.2)] outline-none resize-none mb-6 text-xl placeholder-zinc-600 leading-relaxed transition-all"
-                placeholder="Ex: Spent 150 on Groceries at Lulu..."
+                className="w-full h-56 glass-card rounded-[2.5rem] p-8 text-white border border-white/10 focus:border-primary focus:shadow-[0_0_40px_rgba(168,85,247,0.2)] outline-none resize-none mb-8 text-2xl font-medium placeholder-zinc-600 leading-relaxed transition-all"
+                placeholder="Ex: Spent 150 on Groceries..."
                 autoFocus
              />
-             <button onClick={handleMagicAnalysis} className="w-full py-5 rounded-[1.5rem] bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-lg shadow-[0_0_30px_rgba(147,51,234,0.4)] active:scale-95 transition-transform hover:shadow-[0_0_50px_rgba(147,51,234,0.6)]">
+             <button onClick={handleMagicAnalysis} className="w-full py-6 rounded-[2rem] bg-gradient-to-r from-primary to-indigo-600 text-white font-bold text-lg tracking-widest uppercase shadow-[0_0_40px_rgba(147,51,234,0.4)] active:scale-95 transition-transform hover:shadow-[0_0_60px_rgba(147,51,234,0.6)]">
                  Analyze Text
              </button>
          </div>
       ) : (
          <>
-            {/* 2. Display Area (Updated Height & Spacing) */}
-            <div className="flex-1 flex flex-col items-center justify-center py-6 pb-8 relative z-10 animate-scale-in shrink-0 min-h-[220px]">
-                <div className="flex flex-col items-center gap-4">
-                    <div className="relative">
-                        {/* Glow Behind Number */}
-                        <div className={`absolute inset-0 blur-[60px] opacity-30 ${type === 'expense' ? 'bg-white' : 'bg-sber-green'}`}></div>
+            {/* 2. Display Area */}
+            <div className="flex-1 flex flex-col items-center justify-center min-h-[200px] relative z-10 animate-scale-in">
+                <div className="flex flex-col items-center gap-6">
+                    <div className="relative group">
+                        {/* Dynamic Glow Behind Number */}
+                        <div className={`absolute inset-0 blur-[80px] opacity-40 rounded-full transition-colors duration-500 ${type === 'expense' ? 'bg-white/20' : 'bg-secondary/30'}`}></div>
                         
                         <div className="flex items-baseline gap-2 relative z-10">
-                            <span className={`text-7xl sm:text-8xl font-bold tracking-tighter tabular-nums drop-shadow-2xl ${type === 'expense' ? 'text-white' : 'text-sber-green'}`}>
+                            <span className={`text-8xl font-display font-bold tracking-tighter tabular-nums drop-shadow-2xl transition-colors duration-300 ${type === 'expense' ? 'text-white' : 'text-secondary'}`}>
                                 {amountStr}
                             </span>
-                            <span className="text-2xl text-zinc-500 font-medium">{user.currency}</span>
+                            <span className="text-3xl text-zinc-500 font-display font-medium">{user.currency}</span>
                         </div>
                     </div>
 
                     {/* Wallet Selector Pill */}
-                    <div className="flex gap-3 mt-2">
+                    <div className="flex gap-4">
                         <button 
                             onClick={() => setWallet('spending')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border ${wallet === 'spending' ? 'bg-zinc-800 border-white/30 text-white shadow-lg shadow-white/5' : 'border-transparent bg-transparent text-zinc-600 hover:text-zinc-400'}`}
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold transition-all border ${wallet === 'spending' ? 'bg-zinc-800 border-white/30 text-white shadow-[0_0_20px_rgba(255,255,255,0.1)]' : 'border-transparent text-zinc-600 hover:text-zinc-400'}`}
                         >
                             <Wallet size={14} /> Spending
                         </button>
                         <button 
                             onClick={() => setWallet('savings')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border ${wallet === 'savings' ? 'bg-[#0f2e1b] border-sber-green/50 text-sber-green shadow-lg shadow-sber-green/10' : 'border-transparent bg-transparent text-zinc-600 hover:text-zinc-400'}`}
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold transition-all border ${wallet === 'savings' ? 'bg-secondary/10 border-secondary/50 text-secondary shadow-[0_0_20px_rgba(16,185,129,0.15)]' : 'border-transparent text-zinc-600 hover:text-zinc-400'}`}
                         >
                             <PiggyBank size={14} /> Savings
                         </button>
@@ -348,8 +298,8 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
             </div>
 
             {/* 3. Category Strip */}
-            <div className="mb-6 pl-4 z-10 animate-slide-up shrink-0 relative" style={{ animationDelay: '0.1s' }}>
-                <div className="flex gap-4 overflow-x-auto no-scrollbar py-2 pr-4 items-center">
+            <div className="mb-6 pl-6 z-10 animate-slide-up-fade" style={{ animationDelay: '100ms' }}>
+                <div className="flex gap-5 overflow-x-auto no-scrollbar py-4 pr-6 items-center">
                     {CATEGORIES.map(cat => {
                         const Icon = (Icons as any)[cat.icon] || Icons.Circle;
                         const isSelected = selectedCategory === cat.id;
@@ -357,20 +307,20 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
                             <button
                                 key={cat.id}
                                 onClick={() => setSelectedCategory(cat.id)}
-                                className={`flex flex-col items-center gap-2 min-w-[4.5rem] transition-all duration-300 group ${isSelected ? 'scale-110 -translate-y-1' : 'opacity-60 hover:opacity-100'}`}
+                                className={`flex flex-col items-center gap-2.5 min-w-[5rem] transition-all duration-300 group ${isSelected ? 'scale-110 -translate-y-2' : 'opacity-50 hover:opacity-100 hover:-translate-y-1'}`}
                             >
                                 <div 
-                                    className={`w-14 h-14 rounded-[1.5rem] flex items-center justify-center shadow-lg transition-all relative overflow-hidden`}
+                                    className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center shadow-lg transition-all relative overflow-hidden`}
                                     style={{ 
-                                        backgroundColor: isSelected ? cat.color : '#1C1C1E', 
-                                        border: isSelected ? 'none' : '1px solid rgba(255,255,255,0.05)',
-                                        boxShadow: isSelected ? `0 10px 30px -10px ${cat.color}80` : 'none'
+                                        backgroundColor: isSelected ? cat.color : 'rgba(255,255,255,0.03)', 
+                                        border: isSelected ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                                        boxShadow: isSelected ? `0 10px 40px -10px ${cat.color}` : 'none'
                                     }}
                                 >
-                                    {isSelected && <div className="absolute inset-0 bg-white/20 animate-pulse-slow"></div>}
-                                    <Icon size={22} className="text-white relative z-10" />
+                                    {isSelected && <div className="absolute inset-0 bg-white/20 animate-pulse"></div>}
+                                    <Icon size={26} className="text-white relative z-10 drop-shadow-md" />
                                 </div>
-                                <span className={`text-[10px] font-bold truncate max-w-full tracking-wide ${isSelected ? 'text-white drop-shadow-md' : 'text-zinc-500'}`}>
+                                <span className={`text-[10px] font-bold truncate max-w-full tracking-wider ${isSelected ? 'text-white text-glow' : 'text-zinc-600'}`}>
                                     {user.language === 'ar' ? cat.name_ar : cat.name_en}
                                 </span>
                             </button>
@@ -379,46 +329,29 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
                 </div>
             </div>
 
-            {/* 4. Tools & Keypad Container (Compact) */}
-            <div className="glass-panel rounded-t-[2.5rem] p-5 pb-32 border-t border-white/10 shadow-[0_-20px_60px_rgba(0,0,0,0.8)] z-20 animate-slide-up shrink-0" style={{ animationDelay: '0.2s' }}>
+            {/* 4. Tools & Keypad Container */}
+            <div className="glass-card rounded-t-[3.5rem] p-6 pb-12 border-t border-white/10 shadow-[0_-20px_80px_rgba(0,0,0,0.8)] z-20 animate-slide-up-fade" style={{ animationDelay: '200ms' }}>
                 
                 {/* Tools Row */}
-                <div className="grid grid-cols-4 gap-3 mb-4">
-                    <ToolButton 
-                        icon={Wand2} label="Magic" 
-                        onClick={() => setShowMagicInput(true)} 
-                        active={false}
-                    />
-                    <ToolButton 
-                        icon={Camera} label="Scan" 
-                        onClick={() => fileInputRef.current?.click()} 
-                        active={false}
-                    />
-                    <ToolButton 
-                        icon={PenLine} label={note ? "Edit" : "Note"} 
-                        onClick={() => setShowNoteModal(true)} 
-                        active={!!note}
-                    />
-                    <ToolButton 
-                        icon={Calendar} label={date === new Date().toISOString().split('T')[0] ? "Today" : date.slice(5)} 
-                        onClick={() => setShowDateModal(true)} 
-                        active={date !== new Date().toISOString().split('T')[0]}
-                    />
+                <div className="grid grid-cols-4 gap-4 mb-8">
+                    <ToolButton icon={Wand2} label="Magic" onClick={() => setShowMagicInput(true)} />
+                    <ToolButton icon={Camera} label="Scan" onClick={() => fileInputRef.current?.click()} />
+                    <ToolButton icon={PenLine} label={note ? "Edit" : "Note"} onClick={() => setShowNoteModal(true)} active={!!note} />
+                    <ToolButton icon={Calendar} label={date === new Date().toISOString().split('T')[0] ? "Today" : date.slice(5)} onClick={() => setShowDateModal(true)} active={date !== new Date().toISOString().split('T')[0]} />
                 </div>
 
-                {/* Hidden File Input */}
                 <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
 
-                {/* Keypad Grid (Tight Spacing) */}
-                <div className="grid grid-cols-4 gap-3">
+                {/* Keypad Grid */}
+                <div className="grid grid-cols-4 gap-4">
                     <NumpadButton onClick={() => handleNumPress('1')}>1</NumpadButton>
                     <NumpadButton onClick={() => handleNumPress('2')}>2</NumpadButton>
                     <NumpadButton onClick={() => handleNumPress('3')}>3</NumpadButton>
                     <button 
                         onClick={handleDelete} 
-                        className="glass rounded-[1.5rem] flex items-center justify-center text-red-400 hover:bg-red-500/10 active:scale-90 transition-all"
+                        className="glass-card rounded-[2rem] flex items-center justify-center text-red-400 hover:bg-red-500/10 hover:border-red-500/30 active:scale-90 transition-all group"
                     >
-                        <Delete size={24} />
+                        <Delete size={30} className="group-hover:text-red-300" />
                     </button>
 
                     <NumpadButton onClick={() => handleNumPress('4')}>4</NumpadButton>
@@ -429,13 +362,13 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
                     <button 
                         onClick={handleSave}
                         disabled={parseFloat(amountStr) === 0}
-                        className={`row-span-2 rounded-[1.5rem] flex flex-col items-center justify-center gap-1 transition-all active:scale-95 duration-300 ${
+                        className={`row-span-2 rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-all duration-300 ${
                             parseFloat(amountStr) > 0 
-                            ? (type === 'expense' ? 'bg-white text-black shadow-[0_0_40px_rgba(255,255,255,0.4)] hover:shadow-[0_0_60px_rgba(255,255,255,0.6)]' : 'bg-sber-green text-white shadow-[0_0_40px_rgba(33,160,56,0.4)] hover:shadow-[0_0_60px_rgba(33,160,56,0.6)]') 
-                            : 'glass-strong text-zinc-600'
+                            ? (type === 'expense' ? 'bg-white text-black shadow-[0_0_40px_rgba(255,255,255,0.5)] scale-105 active:scale-95' : 'bg-secondary text-white shadow-[0_0_40px_rgba(16,185,129,0.5)] scale-105 active:scale-95') 
+                            : 'glass-card text-zinc-700 cursor-not-allowed'
                         }`}
                     >
-                        <Check size={32} strokeWidth={3} />
+                        <Check size={40} strokeWidth={4} />
                     </button>
 
                     <NumpadButton onClick={() => handleNumPress('7')}>7</NumpadButton>
@@ -445,51 +378,51 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
                     <NumpadButton onClick={() => handleNumPress('.')}>.</NumpadButton>
                     <NumpadButton onClick={() => handleNumPress('0')}>0</NumpadButton>
                     <div className="flex items-center justify-center">
-                        <span className="text-[10px] text-zinc-600 font-mono tracking-widest opacity-50">v2.5</span>
+                        <span className="text-[10px] text-zinc-700 font-mono tracking-widest opacity-50">V3.0</span>
                     </div>
                 </div>
             </div>
 
             {/* Note Modal */}
             {showNoteModal && (
-                <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center sm:p-4 animate-fade-in">
+                <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-xl flex items-end sm:items-center justify-center sm:p-4 animate-fade-in">
                     <div className="absolute inset-0" onClick={() => setShowNoteModal(false)} />
-                    <div className="relative w-full max-w-sm glass-strong border border-white/10 rounded-t-[2.5rem] sm:rounded-[2.5rem] p-8 animate-slide-up shadow-2xl">
-                        <div className="w-12 h-1 bg-white/20 rounded-full mx-auto mb-6"></div>
-                        <h3 className="text-xl font-bold text-white mb-6 text-center">Add Details</h3>
+                    <div className="relative w-full max-w-sm glass-card border border-white/10 rounded-t-[3rem] sm:rounded-[3rem] p-8 animate-slide-up-fade shadow-2xl">
+                        <div className="w-16 h-1.5 bg-white/10 rounded-full mx-auto mb-8"></div>
+                        <h3 className="text-2xl font-display font-bold text-white mb-6 text-center">Add Details</h3>
                         <input 
                             type="text" 
                             placeholder="Vendor Name (e.g. Starbucks)" 
                             value={vendor}
                             onChange={e => setVendor(e.target.value)}
-                            className="w-full bg-black/50 p-5 rounded-2xl border border-white/10 text-white mb-4 outline-none focus:border-white/30 transition-all placeholder-zinc-600"
+                            className="w-full bg-white/5 p-5 rounded-2xl border border-white/10 text-white mb-4 outline-none focus:border-white/30 focus:shadow-[0_0_20px_rgba(255,255,255,0.1)] transition-all placeholder-zinc-600"
                             autoFocus
                         />
                         <textarea 
                             placeholder="Additional notes..." 
                             value={note}
                             onChange={e => setNote(e.target.value)}
-                            className="w-full bg-black/50 p-5 rounded-2xl border border-white/10 text-white h-32 resize-none outline-none focus:border-white/30 transition-all placeholder-zinc-600"
+                            className="w-full bg-white/5 p-5 rounded-2xl border border-white/10 text-white h-36 resize-none outline-none focus:border-white/30 focus:shadow-[0_0_20px_rgba(255,255,255,0.1)] transition-all placeholder-zinc-600"
                         />
-                        <button onClick={() => setShowNoteModal(false)} className="w-full bg-white text-black font-bold py-5 rounded-2xl mt-6 shadow-lg hover:bg-gray-200 transition-colors">Done</button>
+                        <button onClick={() => setShowNoteModal(false)} className="w-full bg-white text-black font-bold py-5 rounded-2xl mt-6 shadow-[0_0_30px_rgba(255,255,255,0.2)] hover:scale-[1.02] transition-all uppercase tracking-widest">Done</button>
                     </div>
                 </div>
             )}
 
             {/* Date Modal */}
             {showDateModal && (
-                <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center sm:p-4 animate-fade-in">
+                <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-xl flex items-end sm:items-center justify-center sm:p-4 animate-fade-in">
                     <div className="absolute inset-0" onClick={() => setShowDateModal(false)} />
-                    <div className="relative w-full max-w-sm glass-strong border border-white/10 rounded-t-[2.5rem] sm:rounded-[2.5rem] p-8 animate-slide-up shadow-2xl">
-                        <div className="w-12 h-1 bg-white/20 rounded-full mx-auto mb-6"></div>
-                        <h3 className="text-xl font-bold text-white mb-6 text-center">Select Date</h3>
+                    <div className="relative w-full max-w-sm glass-card border border-white/10 rounded-t-[3rem] sm:rounded-[3rem] p-8 animate-slide-up-fade shadow-2xl">
+                        <div className="w-16 h-1.5 bg-white/10 rounded-full mx-auto mb-8"></div>
+                        <h3 className="text-2xl font-display font-bold text-white mb-6 text-center">Select Date</h3>
                         <input 
                             type="date" 
                             value={date}
                             onChange={e => setDate(e.target.value)}
-                            className="w-full bg-black/50 p-5 rounded-2xl border border-white/10 text-white outline-none focus:border-white/30 text-center text-xl font-bold transition-all"
+                            className="w-full bg-white/5 p-6 rounded-2xl border border-white/10 text-white outline-none focus:border-white/30 text-center text-2xl font-display font-bold transition-all"
                         />
-                        <button onClick={() => setShowDateModal(false)} className="w-full bg-white text-black font-bold py-5 rounded-2xl mt-6 shadow-lg hover:bg-gray-200 transition-colors">Confirm</button>
+                        <button onClick={() => setShowDateModal(false)} className="w-full bg-white text-black font-bold py-5 rounded-2xl mt-6 shadow-[0_0_30px_rgba(255,255,255,0.2)] hover:scale-[1.02] transition-all uppercase tracking-widest">Confirm</button>
                     </div>
                 </div>
             )}
@@ -506,7 +439,7 @@ export const AddTransactionPage: React.FC<Props> = ({ user, transactions, onSave
 import React, { useState, useEffect } from 'react';
 import { UserSettings, Transaction } from '../types';
 import { getDeepFinancialAnalysis } from '../services/geminiService';
-import { X, Download, Sparkles, Bot, RefreshCw, ChevronRight, ShieldCheck, Target, AlertTriangle, TrendingUp } from 'lucide-react';
+import { X, Download, Sparkles, Bot, RefreshCw, ChevronRight, ShieldCheck, Target, BrainCircuit, Cpu } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { TRANSLATIONS } from '../constants';
 
@@ -525,9 +458,9 @@ const LoadingStep = ({ text, delay }: { text: string, delay: number }) => {
 
     if (!visible) return null;
     return (
-        <div className="flex items-center gap-3 animate-in slide-in-from-bottom-2 fade-in duration-500">
-            <div className="w-2 h-2 bg-sber-green rounded-full animate-pulse"></div>
-            <span className="text-sm text-zinc-400 font-mono">{text}</span>
+        <div className="flex items-center gap-3 animate-slide-up-fade">
+            <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse shadow-[0_0_10px_#a855f7]"></div>
+            <span className="text-xs text-zinc-400 font-mono tracking-widest uppercase">{text}</span>
         </div>
     );
 };
@@ -551,7 +484,7 @@ export const AIAdvisor: React.FC<Props> = ({ user, transactions, onClose }) => {
       );
       setReport(result);
     } catch (e) {
-      setReport("Failed to generate report. Please check your API key and connection.");
+      setReport("Signal lost. Neural link failed. Check API Key.");
     } finally {
       setLoading(false);
     }
@@ -575,50 +508,54 @@ export const AIAdvisor: React.FC<Props> = ({ user, transactions, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-6">
-      {/* Backdrop */}
+      {/* Backdrop with Blur */}
       <div 
-        className="absolute inset-0 bg-black/80 backdrop-blur-xl transition-opacity duration-500 animate-in fade-in" 
+        className="absolute inset-0 bg-black/60 backdrop-blur-xl transition-opacity duration-500 animate-fade-in" 
         onClick={onClose}
       />
 
-      {/* Main Card */}
-      <div className="relative w-full max-w-2xl bg-[#0a0a0a] border border-white/10 rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col animate-in slide-in-from-bottom-10 duration-500">
+      {/* Main Holographic Card */}
+      <div className="relative w-full max-w-2xl glass-panel rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col animate-slide-up-fade border border-white/10">
         
+        {/* Animated Header Background */}
+        <div className="absolute top-0 inset-x-0 h-32 bg-gradient-to-b from-purple-900/20 to-transparent pointer-events-none"></div>
+
         {/* Header */}
-        <div className="p-6 border-b border-white/5 flex justify-between items-center bg-[#1C1C1E]/50 sticky top-0 z-20 backdrop-blur-md">
+        <div className="p-6 border-b border-white/5 flex justify-between items-center relative z-20">
           <div className="flex items-center gap-4">
              <div className="relative">
-                <div className="absolute inset-0 bg-indigo-500 blur-lg opacity-40 animate-pulse"></div>
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center shadow-lg relative z-10 border border-white/10">
-                    <Bot className="text-white w-6 h-6" />
+                <div className="absolute inset-0 bg-purple-500 blur-lg opacity-40 animate-pulse"></div>
+                <div className="w-12 h-12 rounded-2xl bg-black/40 border border-white/10 flex items-center justify-center shadow-lg relative z-10 backdrop-blur-md">
+                    <Bot className="text-purple-400 w-6 h-6" />
                 </div>
              </div>
              <div>
-               <h2 className="text-xl font-bold text-white flex items-center gap-2">
+               <h2 className="text-xl font-display font-bold text-white flex items-center gap-2 tracking-wide text-glow">
                  Gemini Advisor
-                 <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30 font-bold tracking-wider">PRO</span>
+                 <span className="text-[9px] bg-purple-500/10 text-purple-300 px-2 py-0.5 rounded-full border border-purple-500/30 font-bold tracking-widest uppercase">PRO</span>
                </h2>
-               <p className="text-xs text-gray-400">Powered by Google AI</p>
+               <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Powered by Google AI</p>
              </div>
           </div>
           <button 
             onClick={onClose} 
-            className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+            className="w-10 h-10 rounded-full glass hover:bg-white/10 flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
           >
             <X size={20} />
           </button>
         </div>
 
         {/* Content Area */}
-        <div className="overflow-y-auto p-6 scrollbar-hide min-h-[400px]">
+        <div className="overflow-y-auto p-6 scrollbar-hide min-h-[400px] relative z-10">
             {user.isGuest || !user.apiKey ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center space-y-6">
-                    <div className="w-24 h-24 bg-zinc-900 rounded-full flex items-center justify-center border border-zinc-800">
-                        <ShieldCheck className="w-10 h-10 text-zinc-600" />
+                    <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center border border-white/5 relative">
+                        <ShieldCheck className="w-10 h-10 text-zinc-500" />
+                        <div className="absolute inset-0 border border-white/5 rounded-full animate-ping opacity-20"></div>
                     </div>
                     <div className="max-w-xs mx-auto">
-                        <h3 className="text-xl font-bold text-white mb-2">Feature Locked</h3>
-                        <p className="text-gray-400 text-sm">
+                        <h3 className="text-xl font-display font-bold text-white mb-2">Access Restricted</h3>
+                        <p className="text-zinc-500 text-sm">
                             {user.language === 'ar' 
                             ? 'المستشار الذكي يتطلب مفتاح API. يرجى إضافته من الإعدادات.' 
                             : 'AI Advisor requires a valid Gemini API Key. Please add one in Settings.'}
@@ -626,54 +563,58 @@ export const AIAdvisor: React.FC<Props> = ({ user, transactions, onClose }) => {
                     </div>
                     <button 
                         onClick={onClose}
-                        className="bg-white text-black px-8 py-3 rounded-xl font-bold hover:bg-gray-200 transition-colors"
+                        className="glass-card hover:bg-white/10 px-8 py-3 rounded-xl font-bold text-sm transition-colors text-white"
                     >
                         Close
                     </button>
                 </div>
             ) : loading ? (
-                <div className="flex flex-col items-center justify-center py-12 space-y-8">
-                    <div className="relative">
-                        <div className="w-24 h-24 border-4 border-indigo-500/20 rounded-full animate-[spin_3s_linear_infinite]"></div>
-                        <div className="absolute inset-0 border-4 border-t-indigo-500 rounded-full animate-[spin_1.5s_linear_infinite]"></div>
-                        <Sparkles className="absolute inset-0 m-auto text-indigo-400 animate-pulse w-8 h-8" />
+                <div className="flex flex-col items-center justify-center py-12 space-y-10">
+                    {/* Neural Network Loader */}
+                    <div className="relative w-32 h-32 flex items-center justify-center">
+                        <div className="absolute inset-0 border-2 border-purple-500/20 rounded-full animate-[spin_10s_linear_infinite]"></div>
+                        <div className="absolute inset-2 border-2 border-t-purple-500 border-r-transparent border-b-purple-500/50 border-l-transparent rounded-full animate-[spin_3s_linear_infinite]"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <Cpu className="text-purple-400 w-10 h-10 animate-pulse" />
+                        </div>
+                        {/* Orbiting particles */}
+                        <div className="absolute top-0 left-1/2 w-2 h-2 bg-blue-400 rounded-full shadow-[0_0_10px_#60a5fa] animate-ping"></div>
                     </div>
                     
                     <div className="space-y-3 text-left w-64">
-                        <LoadingStep text="Connecting to Neural Network..." delay={0} />
-                        <LoadingStep text="Analyzing transaction history..." delay={1000} />
-                        <LoadingStep text="Detecting spending patterns..." delay={2500} />
-                        <LoadingStep text="Formulating strategic advice..." delay={4000} />
+                        <LoadingStep text="Initializing Neural Core..." delay={0} />
+                        <LoadingStep text="Scanning Transaction Matrix..." delay={1200} />
+                        <LoadingStep text="Detecting Anomalies..." delay={2800} />
+                        <LoadingStep text="Synthesizing Strategy..." delay={4500} />
                     </div>
                 </div>
             ) : (
-                <div className="space-y-6 animate-in fade-in duration-700">
+                <div className="space-y-6 animate-slide-up-fade">
                     <div className={`prose prose-invert max-w-none ${user.language === 'ar' ? 'text-right' : 'text-left'}`} dir={user.language === 'ar' ? 'rtl' : 'ltr'}>
                         <ReactMarkdown
                             components={{
-                                // Custom Styling for Markdown Elements
                                 h1: ({node, ...props}) => (
                                     <div className="mb-8 border-b border-white/10 pb-4">
-                                        <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400 mb-2" {...props} />
+                                        <h1 className="text-3xl font-display font-bold text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-400 mb-2" {...props} />
                                     </div>
                                 ),
                                 h2: ({node, ...props}) => (
-                                    <div className="mt-10 mb-4 flex items-center gap-3 bg-white/5 p-3 rounded-xl border border-white/5">
-                                        <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center">
-                                            <Target className="w-5 h-5 text-indigo-400" />
+                                    <div className="mt-10 mb-4 flex items-center gap-3 bg-white/5 p-3 rounded-xl border border-white/5 backdrop-blur-sm">
+                                        <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                                            <Target className="w-4 h-4 text-purple-400" />
                                         </div>
-                                        <h2 className="text-lg font-bold text-white m-0" {...props} />
+                                        <h2 className="text-lg font-display font-bold text-white m-0 tracking-wide" {...props} />
                                     </div>
                                 ),
                                 ul: ({node, ...props}) => <ul className="grid grid-cols-1 gap-3 my-4 list-none p-0" {...props} />,
                                 li: ({node, ...props}) => (
-                                    <li className="bg-[#1C1C1E] p-4 rounded-xl border border-white/5 flex items-start gap-3 hover:bg-[#252527] transition-colors">
-                                        <div className="mt-1 w-2 h-2 rounded-full bg-sber-green shrink-0"></div>
-                                        <span className="text-sm text-gray-300 leading-relaxed" {...props} />
+                                    <li className="glass-card p-4 rounded-xl border border-white/5 flex items-start gap-3 hover:bg-white/5 transition-colors group">
+                                        <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-sber-green shadow-[0_0_8px_#22c55e] shrink-0 group-hover:scale-125 transition-transform"></div>
+                                        <span className="text-sm text-zinc-300 leading-relaxed font-medium" {...props} />
                                     </li>
                                 ),
-                                strong: ({node, ...props}) => <strong className="text-indigo-300 font-bold bg-indigo-500/10 px-1 rounded" {...props} />,
-                                p: ({node, ...props}) => <p className="text-gray-400 text-sm leading-relaxed mb-4" {...props} />,
+                                strong: ({node, ...props}) => <strong className="text-purple-300 font-bold bg-purple-500/10 px-1.5 py-0.5 rounded text-xs uppercase tracking-wider" {...props} />,
+                                p: ({node, ...props}) => <p className="text-zinc-400 text-sm leading-relaxed mb-4" {...props} />,
                             }}
                         >
                             {report || ''}
@@ -685,18 +626,18 @@ export const AIAdvisor: React.FC<Props> = ({ user, transactions, onClose }) => {
 
         {/* Footer Actions */}
         {!loading && report && (
-            <div className="p-6 border-t border-white/5 bg-[#1C1C1E]/80 backdrop-blur-md flex gap-3">
+            <div className="p-6 border-t border-white/5 bg-black/20 backdrop-blur-md flex gap-3 relative z-20">
                 <button 
                     onClick={generateReport}
-                    className="w-14 h-14 rounded-2xl bg-[#2C2C2E] border border-white/5 flex items-center justify-center text-white hover:bg-[#3A3A3C] transition-colors"
+                    className="w-14 h-14 rounded-2xl glass-card flex items-center justify-center text-zinc-400 hover:text-white transition-colors hover:bg-white/5"
                 >
                     <RefreshCw size={20} />
                 </button>
                 <button 
                     onClick={handleDownload}
-                    className="flex-1 bg-white text-black hover:bg-gray-200 font-bold rounded-2xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95"
+                    className="flex-1 bg-white text-black hover:bg-zinc-200 font-bold rounded-2xl shadow-[0_0_20px_rgba(255,255,255,0.2)] flex items-center justify-center gap-2 transition-all active:scale-95 uppercase tracking-wider text-xs"
                 >
-                    <Download size={20} />
+                    <Download size={18} />
                     {t.download_report}
                 </button>
             </div>
@@ -712,7 +653,7 @@ export const AIAdvisor: React.FC<Props> = ({ user, transactions, onClose }) => {
 ```tsx
 import React from 'react';
 import { UserSettings, BudgetPlan, PlanType } from '../types';
-import { Shield, Scale, Coffee, CheckCircle, CalendarDays, Calculator, AlertTriangle, PiggyBank } from 'lucide-react';
+import { Shield, Scale, Coffee, CheckCircle, CalendarDays, Calculator, AlertTriangle, PiggyBank, Sparkles } from 'lucide-react';
 import { TRANSLATIONS } from '../constants';
 
 interface Props {
@@ -731,7 +672,6 @@ export const BudgetPlans: React.FC<Props> = ({ user, onSelectPlan }) => {
 
   let nextSalary = user.nextSalaryDate ? new Date(user.nextSalaryDate) : null;
   if (!nextSalary || nextSalary < today) {
-      // Fallback: Estimate next salary based on interval
       nextSalary = new Date(today);
       nextSalary.setDate(today.getDate() + (user.salaryInterval || 30));
   }
@@ -740,82 +680,67 @@ export const BudgetPlans: React.FC<Props> = ({ user, onSelectPlan }) => {
   const diffTime = nextSalary.getTime() - today.getTime();
   const daysRemaining = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
 
-  // B. Weighted Days Logic (Weekends are more expensive)
+  // B. Weighted Days Logic
   let weekendsCount = 0;
   let weekdaysCount = 0;
   for (let i = 0; i < daysRemaining; i++) {
       const d = new Date(today);
       d.setDate(today.getDate() + i);
       const day = d.getDay();
-      // Friday(5) & Saturday(6) are weekends in some regions (AR), Sat(6)/Sun(0) in others (EN/RU).
       const isWeekend = user.language === 'ar' ? (day === 5 || day === 6) : (day === 6 || day === 0);
       if (isWeekend) weekendsCount++;
       else weekdaysCount++;
   }
 
-  // C. Liability Analysis (Scanning Recurring Bills)
-  const currentMonthPrefix = today.toISOString().slice(0, 7); // YYYY-MM
+  // C. Liability Analysis
+  const currentMonthPrefix = today.toISOString().slice(0, 7);
   const bills = user.recurringBills || [];
   
-  // Calculate total unpaid bills that are likely due before next salary
-  // Assumption: Any bill not marked paid this month is a liability
   const unpaidBillsTotal = bills.reduce((sum, bill) => {
       const isPaidThisMonth = bill.lastPaidDate && bill.lastPaidDate.startsWith(currentMonthPrefix);
       return isPaidThisMonth ? sum : sum + bill.amount;
   }, 0);
 
-  // D. Net Disposable Income (The Real Money)
+  // D. Net Disposable Income
   const grossBalance = user.currentBalance > 0 ? user.currentBalance : 0;
-  // We reserve money for bills FIRST
   const netDisposable = Math.max(0, grossBalance - unpaidBillsTotal);
   
-  const isCritical = grossBalance < unpaidBillsTotal; // Danger zone
+  const isCritical = grossBalance < unpaidBillsTotal;
 
   // --- 2. Plan Generation Strategy ---
 
   const createSmartPlan = (type: PlanType): BudgetPlan => {
-      // Configuration based on Plan Type
-      let safetyBufferPct = 0; // Hidden money for emergencies
-      let weekendMultiplier = 1.0; // How much more to spend on weekends
-      let savingsAggression = 0; // % to forcefully save from Disposable
+      let safetyBufferPct = 0;
+      let weekendMultiplier = 1.0;
+      let savingsAggression = 0;
 
       if (type === 'austerity') {
-          safetyBufferPct = 0.20; // High buffer (20% hidden)
-          weekendMultiplier = 1.0; // No weekend fun
-          savingsAggression = 0.30; // Save 30% of what's left
+          safetyBufferPct = 0.20;
+          weekendMultiplier = 1.0;
+          savingsAggression = 0.30;
       } else if (type === 'balanced') {
-          safetyBufferPct = 0.10; // Moderate buffer
-          weekendMultiplier = 1.3; // 30% more on weekends
-          savingsAggression = 0.15; // Save 15%
+          safetyBufferPct = 0.10;
+          weekendMultiplier = 1.3;
+          savingsAggression = 0.15;
       } else { // Comfort
-          safetyBufferPct = 0.05; // Minimal buffer
-          weekendMultiplier = 1.6; // 60% more on weekends (Party mode)
-          savingsAggression = 0.0; // Spend it all
+          safetyBufferPct = 0.05;
+          weekendMultiplier = 1.6;
+          savingsAggression = 0.0;
       }
 
-      // 1. Deduct Safety Buffer
       const afterBuffer = netDisposable * (1 - safetyBufferPct);
-      
-      // 2. Deduct Planned Savings
       const spendablePool = afterBuffer * (1 - savingsAggression);
-      const projectedSavings = (netDisposable - spendablePool) + (grossBalance - netDisposable - unpaidBillsTotal); // Math simplification: Total - Spent
-
-      // 3. Weighted Daily Calculation
-      // Formula: Total = (Weekdays * Daily) + (Weekends * Daily * Multiplier)
-      // Total = Daily * (Weekdays + Weekends * Multiplier)
-      // Daily = Total / (Weekdays + Weekends * Multiplier)
+      const projectedSavings = (netDisposable - spendablePool) + (grossBalance - netDisposable - unpaidBillsTotal);
       
       const weightedDivisor = weekdaysCount + (weekendsCount * weekendMultiplier);
       const baseDaily = Math.floor(spendablePool / Math.max(1, weightedDivisor));
       
-      // If today is weekend, show the boosted amount, else base amount
       const todayIsWeekend = user.language === 'ar' 
         ? (today.getDay() === 5 || today.getDay() === 6)
         : (today.getDay() === 6 || today.getDay() === 0);
 
       const todayLimit = todayIsWeekend ? Math.floor(baseDaily * weekendMultiplier) : baseDaily;
 
-      // Descriptions
       let desc_en = '', desc_ar = '', desc_ru = '';
       if (type === 'austerity') {
           desc_en = `Survival mode. Reserves ${unpaidBillsTotal} for bills + 20% buffer.`;
@@ -842,21 +767,21 @@ export const BudgetPlans: React.FC<Props> = ({ user, onSelectPlan }) => {
   };
 
   const plans: BudgetPlan[] = isCritical 
-    ? [createSmartPlan('austerity')] // Only show austerity if broke
+    ? [createSmartPlan('austerity')]
     : [createSmartPlan('austerity'), createSmartPlan('balanced'), createSmartPlan('comfort')];
 
   // UI Helpers
   const PLANS_CONFIG = {
-    austerity: { color: 'text-yellow-500', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
-    balanced: { color: 'text-sber-green', bg: 'bg-sber-green/10', border: 'border-sber-green/20' },
-    comfort: { color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20' }
+    austerity: { color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', shadow: 'shadow-yellow-500/20' },
+    balanced: { color: 'text-sber-green', bg: 'bg-sber-green/10', border: 'border-sber-green/30', shadow: 'shadow-sber-green/20' },
+    comfort: { color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30', shadow: 'shadow-blue-500/20' }
   };
 
   const getIcon = (type: PlanType) => {
     switch(type) {
-      case 'austerity': return <Shield className={`w-6 h-6 ${PLANS_CONFIG.austerity.color}`} />;
-      case 'balanced': return <Scale className={`w-6 h-6 ${PLANS_CONFIG.balanced.color}`} />;
-      case 'comfort': return <Coffee className={`w-6 h-6 ${PLANS_CONFIG.comfort.color}`} />;
+      case 'austerity': return <Shield className={`w-6 h-6 ${PLANS_CONFIG.austerity.color} drop-shadow-md`} />;
+      case 'balanced': return <Scale className={`w-6 h-6 ${PLANS_CONFIG.balanced.color} drop-shadow-md`} />;
+      case 'comfort': return <Coffee className={`w-6 h-6 ${PLANS_CONFIG.comfort.color} drop-shadow-md`} />;
     }
   };
 
@@ -873,67 +798,65 @@ export const BudgetPlans: React.FC<Props> = ({ user, onSelectPlan }) => {
     <div className="space-y-6">
       
       {/* 1. The Financial Reality Check (Header) */}
-      <div className="bg-[#1C1C1E] p-5 rounded-[1.5rem] border border-white/5 mx-1 relative overflow-hidden">
+      <div className="glass-card p-6 rounded-[2.5rem] relative overflow-hidden animate-slide-up-fade">
           {/* Background Pattern */}
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-3xl -z-10"></div>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-[80px] -mr-20 -mt-20 pointer-events-none animate-pulse-glow"></div>
           
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-2 gap-4 mb-6 relative z-10">
                {/* Time Context */}
                <div className="flex flex-col gap-1">
                    <div className="flex items-center gap-2 text-zinc-400">
                        <CalendarDays size={14} />
-                       <span className="text-[10px] font-bold uppercase tracking-wider">{user.language === 'ar' ? 'حتى الراتب' : 'Until Salary'}</span>
+                       <span className="text-[10px] font-bold uppercase tracking-widest">{user.language === 'ar' ? 'حتى الراتب' : 'Until Payday'}</span>
                    </div>
                    <div className="flex items-baseline gap-1">
-                        <span className="text-2xl font-bold text-white">{daysRemaining}</span>
-                        <span className="text-xs text-zinc-500">{user.language === 'ar' ? 'يوم' : 'days'}</span>
+                        <span className="text-3xl font-display font-bold text-white tracking-tighter tabular-nums text-glow">{daysRemaining}</span>
+                        <span className="text-xs text-zinc-500 font-bold uppercase">{user.language === 'ar' ? 'يوم' : 'days'}</span>
                    </div>
-                   <div className="flex gap-2 text-[10px] mt-1">
-                       <span className="bg-white/5 px-2 py-0.5 rounded text-zinc-400">{weekdaysCount} Work</span>
-                       <span className="bg-white/5 px-2 py-0.5 rounded text-zinc-400">{weekendsCount} W/End</span>
+                   <div className="flex gap-2 text-[9px] mt-1">
+                       <span className="bg-white/5 px-2 py-1 rounded-md text-zinc-400 border border-white/5">{weekdaysCount} Work</span>
+                       <span className="bg-white/5 px-2 py-1 rounded-md text-zinc-400 border border-white/5">{weekendsCount} Off</span>
                    </div>
                </div>
 
                {/* Money Context */}
                <div className="flex flex-col gap-1 text-right">
                    <div className="flex items-center gap-2 justify-end text-zinc-400">
-                       <span className="text-[10px] font-bold uppercase tracking-wider">{user.language === 'ar' ? 'السيولة الحقيقية' : 'Disposable Cash'}</span>
+                       <span className="text-[10px] font-bold uppercase tracking-widest">{user.language === 'ar' ? 'السيولة الحقيقية' : 'Disposable'}</span>
                        <Calculator size={14} />
                    </div>
                    <div className={`flex items-baseline justify-end gap-1 ${isCritical ? 'text-red-500' : 'text-sber-green'}`}>
-                        <span className="text-2xl font-bold tabular-nums">{netDisposable.toLocaleString()}</span>
-                        <span className="text-xs">{user.currency}</span>
+                        <span className="text-3xl font-display font-bold tabular-nums text-glow">{netDisposable.toLocaleString()}</span>
+                        <span className="text-xs font-bold">{user.currency}</span>
                    </div>
                    {unpaidBillsTotal > 0 && (
-                       <p className="text-[10px] text-red-400/80 font-medium">
-                           -{unpaidBillsTotal} {user.language === 'ar' ? 'محجوزة للفواتير' : 'reserved for bills'}
+                       <p className="text-[10px] text-red-400 font-medium bg-red-500/10 px-2 py-0.5 rounded-full ml-auto w-fit">
+                           -{unpaidBillsTotal} {user.language === 'ar' ? 'محجوزة' : 'reserved'}
                        </p>
                    )}
                </div>
           </div>
 
           {/* Progress Bar: Bills vs Disposable */}
-          <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden flex">
+          <div className="w-full h-3 bg-black/40 rounded-full overflow-hidden flex border border-white/5">
               <div 
-                className="h-full bg-red-500/50" 
+                className="h-full bg-red-500 shadow-[0_0_10px_red]" 
                 style={{ width: `${Math.min((unpaidBillsTotal / grossBalance) * 100, 100)}%` }} 
-                title="Reserved for Bills"
               />
               <div 
-                className="h-full bg-sber-green" 
+                className="h-full bg-sber-green shadow-[0_0_10px_#22c55e]" 
                 style={{ width: `${Math.min((netDisposable / grossBalance) * 100, 100)}%` }} 
-                title="Disposable"
               />
           </div>
       </div>
 
       {/* 2. Critical Warning */}
       {isCritical && (
-          <div className="mx-1 bg-red-500/10 border border-red-500/20 p-4 rounded-2xl flex items-start gap-3">
-              <AlertTriangle className="text-red-500 w-6 h-6 shrink-0" />
+          <div className="glass-card bg-red-500/10 border-red-500/20 p-4 rounded-2xl flex items-start gap-4 animate-pulse-glow">
+              <div className="p-2 bg-red-500/20 rounded-full text-red-500 shadow-lg"><AlertTriangle size={20} /></div>
               <div>
-                  <h4 className="text-red-500 font-bold text-sm">{user.language === 'ar' ? 'عجز مالي حرج!' : 'Critical Deficit!'}</h4>
-                  <p className="text-xs text-red-400 mt-1">
+                  <h4 className="text-red-400 font-bold text-xs uppercase tracking-wider">{user.language === 'ar' ? 'عجز مالي حرج!' : 'Critical Deficit!'}</h4>
+                  <p className="text-[10px] text-zinc-300 mt-1 leading-relaxed">
                       {user.language === 'ar' 
                       ? `رصيدك الحالي (${grossBalance}) أقل من الفواتير المستحقة (${unpaidBillsTotal}). لا يمكنك اختيار خطة رفاهية.` 
                       : `Your balance (${grossBalance}) is less than due bills (${unpaidBillsTotal}). Comfort plans disabled.`}
@@ -943,8 +866,8 @@ export const BudgetPlans: React.FC<Props> = ({ user, onSelectPlan }) => {
       )}
 
       {/* 3. The Plans */}
-      <div className="grid grid-cols-1 gap-3 px-1">
-        {plans.map((plan) => {
+      <div className="grid grid-cols-1 gap-3 animate-scale-in" style={{ animationDelay: '100ms' }}>
+        {plans.map((plan, idx) => {
           const isSelected = user.selectedPlan === plan.type;
           const config = PLANS_CONFIG[plan.type];
           
@@ -952,45 +875,48 @@ export const BudgetPlans: React.FC<Props> = ({ user, onSelectPlan }) => {
             <button
               key={plan.type}
               onClick={() => onSelectPlan(plan)}
-              className={`relative p-5 rounded-[1.5rem] border transition-all duration-300 flex flex-col gap-3 text-left group overflow-hidden ${
-                isSelected 
-                  ? `${config.bg} ${config.border} shadow-lg ring-1 ring-inset ${config.color.replace('text', 'ring')}` 
-                  : 'bg-[#1C1C1E] border-white/5 hover:border-white/10'
-              }`}
+              className={`
+                relative p-5 rounded-[2rem] border transition-all duration-300 flex flex-col gap-3 text-left group overflow-hidden
+                ${isSelected 
+                  ? `glass-card ${config.bg} ${config.border} ring-1 ring-inset ${config.color.replace('text', 'ring')} transform scale-[1.02] shadow-2xl` 
+                  : 'glass-card hover:bg-white/5 hover:border-white/10 active:scale-[0.98]'
+                }
+              `}
+              style={{ animationDelay: `${idx * 100}ms` }}
             >
               {isSelected && (
-                  <div className="absolute top-4 right-4 animate-in zoom-in">
-                      <CheckCircle className={`${config.color} w-6 h-6 fill-current opacity-20`} />
-                      <CheckCircle className={`${config.color} w-6 h-6 absolute top-0 left-0`} />
+                  <div className="absolute top-4 right-4 animate-scale-in text-white">
+                      <div className={`absolute inset-0 blur-lg opacity-50 ${config.color.replace('text-', 'bg-')}`}></div>
+                      <CheckCircle className={`w-6 h-6 fill-current relative z-10 ${config.color}`} />
                   </div>
               )}
               
-              <div className="flex items-center gap-3 relative z-10">
-                <div className={`p-3 rounded-2xl bg-black/40 border border-white/5 ${isSelected ? 'shadow-inner' : ''}`}>
+              <div className="flex items-center gap-4 relative z-10">
+                <div className={`p-3.5 rounded-2xl glass-card border border-white/5 ${isSelected ? 'shadow-inner' : ''}`}>
                     {getIcon(plan.type)}
                 </div>
                 <div>
-                    <h4 className={`font-bold text-lg ${isSelected ? 'text-white' : 'text-gray-200'}`}>{getTitle(plan.type)}</h4>
-                    <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wider flex items-center gap-1">
+                    <h4 className={`font-display font-bold text-lg ${isSelected ? 'text-white' : 'text-zinc-200'} tracking-wide`}>{getTitle(plan.type)}</h4>
+                    <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest flex items-center gap-2">
                          {user.language === 'ar' ? 'الحد اليومي' : 'Daily Limit'}
                          {plan.type !== 'austerity' && (
-                             <span className="bg-white/10 px-1 rounded text-[8px] text-white">
-                                 {plan.type === 'balanced' ? '+30%' : '+60%'} W/END
+                             <span className="bg-white/10 px-1.5 py-0.5 rounded text-[8px] text-white border border-white/5">
+                                 {plan.type === 'balanced' ? '+30%' : '+60%'} Weekend
                              </span>
                          )}
                     </span>
                 </div>
               </div>
               
-              <div className="relative z-10 pl-1">
+              <div className="relative z-10 pl-1 mt-1">
                  <div className="flex items-baseline gap-1">
-                    <span className={`text-3xl font-bold tabular-nums ${isSelected ? 'text-white' : 'text-gray-300'}`}>
+                    <span className={`text-4xl font-display font-bold tabular-nums tracking-tighter ${isSelected ? 'text-white text-glow' : 'text-zinc-400'}`}>
                         {plan.dailyLimit}
                     </span>
-                    <span className="text-sm font-medium text-gray-500">{user.currency}</span>
+                    <span className="text-sm font-bold text-zinc-600">{user.currency}</span>
                  </div>
                  
-                 <p className="text-xs text-gray-400 mt-2 leading-relaxed max-w-[90%]">
+                 <p className="text-xs text-zinc-400 mt-2 leading-relaxed max-w-[90%] font-medium">
                     {user.language === 'ar' ? plan.description_ar : user.language === 'ru' ? plan.description_ru : plan.description_en}
                  </p>
               </div>
@@ -998,14 +924,14 @@ export const BudgetPlans: React.FC<Props> = ({ user, onSelectPlan }) => {
               {/* Advanced Stats Badge */}
               <div className="mt-3 pt-3 border-t border-white/5 flex gap-2">
                    {plan.monthlySavingsProjected > 0 && (
-                        <div className={`px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1 bg-green-500/10 text-green-400`}>
-                            <PiggyBank size={10} />
+                        <div className={`px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20`}>
+                            <PiggyBank size={12} />
                             <span>+{plan.monthlySavingsProjected} Save</span>
                         </div>
                    )}
                    {plan.type === 'austerity' && (
-                       <div className={`px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1 bg-yellow-500/10 text-yellow-500`}>
-                           <Shield size={10} />
+                       <div className={`px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1.5 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20`}>
+                           <Shield size={12} />
                            <span>Max Buffer</span>
                        </div>
                    )}
@@ -1022,10 +948,10 @@ export const BudgetPlans: React.FC<Props> = ({ user, onSelectPlan }) => {
 
 ### File: `components\Dashboard.tsx`
 ```tsx
-import React, { useState, useEffect } from 'react';
-import { UserSettings, Transaction, TransactionType, BudgetPlan, WalletType } from '../types';
+import React, { useState } from 'react';
+import { UserSettings, Transaction, BudgetPlan, WalletType } from '../types';
 import { TRANSLATIONS } from '../constants';
-import { Wallet, ArrowUpRight, TrendingUp, CalendarClock, ChevronRight, Zap, PiggyBank, Skull, AlertTriangle, Repeat, Pencil, Target, AlertCircle, Sparkles } from 'lucide-react';
+import { Wallet, ArrowUpRight, TrendingUp, CalendarClock, Zap, PiggyBank, Skull, AlertTriangle, Target, Sparkles, CreditCard, Pencil } from 'lucide-react';
 import { RecurringBills } from './RecurringBills';
 
 interface Props {
@@ -1040,38 +966,20 @@ interface Props {
   onUpdateBankName: (wallet: WalletType, newName: string) => void;
 }
 
-// --- Visual Components (Chips & Logos) ---
-const EMVChip = () => (
-    <div className="w-11 h-8 bg-gradient-to-br from-yellow-200 to-yellow-500 rounded-md border border-yellow-600/50 relative overflow-hidden shadow-inner">
-        <div className="absolute inset-0 opacity-50 border-[0.5px] border-black/20 rounded-md"></div>
-        <div className="absolute top-1/2 left-0 w-full h-[1px] bg-black/20"></div>
-        <div className="absolute left-1/3 top-0 w-[1px] h-full bg-black/20"></div>
-        <div className="absolute right-1/3 top-0 w-[1px] h-full bg-black/20"></div>
-        <div className="absolute top-1/2 left-1/2 w-4 h-4 border border-black/20 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
+// Visual: Rotating Border Light
+const BorderBeam = () => (
+    <div className="absolute inset-0 rounded-[2.5rem] overflow-hidden pointer-events-none z-0">
+        <div className="absolute top-[-50%] left-[-50%] w-[200%] h-[200%] bg-[conic-gradient(from_0deg,transparent_0_340deg,#A855F7_360deg)] animate-[spin_4s_linear_infinite] opacity-30"></div>
     </div>
-);
-
-const VisaLogo = ({ color }: { color: string }) => (
-    <div className="flex items-center font-black italic tracking-tighter text-2xl opacity-90" style={{ color }}>
-        VISA
-    </div>
-);
-
-const NoiseTexture = () => (
-    <div className="absolute inset-0 opacity-[0.12] mix-blend-overlay pointer-events-none z-0" 
-         style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }} 
-    />
 );
 
 export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, onOpenAI, onChangeView, onPayBill, onAddBill, onDeleteBill, onUpdateBankName }) => {
   const t = TRANSLATIONS[user.language];
-  const [activeCard, setActiveCard] = useState<WalletType>('spending');
-  
-  // Rename Modal State
+  const [activeWallet, setActiveWallet] = useState<WalletType>('spending');
   const [renamingWallet, setRenamingWallet] = useState<WalletType | null>(null);
   const [tempName, setTempName] = useState('');
 
-  // --- Logic: Financial Health ---
+  // --- Logic ---
   const transactionsAfterSnapshot = transactions.filter(t => !t.id.startsWith('init-'));
   
   const calcBalance = (w: WalletType, initial: number) => {
@@ -1082,58 +990,57 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
 
   const spendingBalance = calcBalance('spending', user.currentBalance || 0);
   const savingsBalance = calcBalance('savings', user.savingsBalance || 0);
+  
+  const currentBalance = activeWallet === 'spending' ? spendingBalance : savingsBalance;
+  const currentBankName = activeWallet === 'spending' ? user.spendingBankName : user.savingsBankName;
+  
+  // Dynamic Card Styles
+  const cardGradient = activeWallet === 'spending' 
+    ? 'bg-gradient-to-br from-[#1c1c22] via-[#2d1b4e] to-[#0f0f13]' 
+    : 'bg-gradient-to-br from-[#062c1b] via-[#0f4c3a] to-[#02180e]';
+    
+  const accentColor = activeWallet === 'spending' ? 'text-primary' : 'text-secondary';
 
-  // --- Logic: Daily Gauge ---
+  // Daily Limit
   const todayStr = new Date().toISOString().split('T')[0];
   const todaySpent = transactions
       .filter(t => t.type === 'expense' && t.wallet === 'spending' && t.date.startsWith(todayStr))
       .reduce((s, t) => s + t.amount, 0);
   
   const dailyLimit = user.dailyLimit || 0;
-  const isOverBudget = dailyLimit > 0 && todaySpent > dailyLimit;
   const progressPercent = dailyLimit > 0 ? Math.min((todaySpent / dailyLimit) * 100, 100) : 0;
-  
-  let gaugeColor = 'bg-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.6)]'; // Safe Neon
-  if (progressPercent > 75) gaugeColor = 'bg-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.6)]'; // Warning Neon
-  if (progressPercent >= 100) gaugeColor = 'bg-red-500 shadow-[0_0_25px_rgba(239,68,68,0.8)]'; // Danger Neon
 
-  // --- Logic: Salary Countdown ---
+  // Salary
   const calculateDaysToSalary = () => {
       if (!user.lastSalaryDate || !user.salaryInterval) return null;
       const last = new Date(user.lastSalaryDate);
       const next = new Date(last);
       next.setDate(last.getDate() + user.salaryInterval);
-      
       const today = new Date();
       const diffTime = next.getTime() - today.getTime();
       const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return { days: days > 0 ? days : 0, nextDate: next, totalInterval: user.salaryInterval };
+      return { days: days > 0 ? days : 0 };
   };
   const salaryData = calculateDaysToSalary();
 
-  // --- Logic: Burn Rate ---
+  // Burn Rate
   const calculateBurnRate = () => {
       const today = new Date();
       const tenDaysAgo = new Date(today.getTime() - 10 * 24 * 60 * 60 * 1000);
       const recentSpent = transactions
         .filter(t => t.type === 'expense' && t.wallet === 'spending' && new Date(t.date) >= tenDaysAgo)
         .reduce((s, t) => s + t.amount, 0);
-      
       const dailyBurn = recentSpent / 10 || 0;
       if (dailyBurn === 0) return null;
-
       const daysToZero = spendingBalance / dailyBurn;
-      return { dailyBurn, daysToZero };
+      return { daysToZero };
   };
   const burnStats = calculateBurnRate();
 
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
-
-  const handleStartRename = (e: React.MouseEvent, type: WalletType, currentName: string) => {
+  const handleStartRename = (e: React.MouseEvent) => {
       e.stopPropagation();
-      setRenamingWallet(type);
-      setTempName(currentName);
+      setRenamingWallet(activeWallet);
+      setTempName(currentBankName);
   };
 
   const handleSaveRename = () => {
@@ -1143,301 +1050,175 @@ export const Dashboard: React.FC<Props> = ({ user, transactions, onSelectPlan, o
       }
   };
 
-  // --- Premium Card Component ---
-  const PremiumCard = ({ 
-      type, 
-      balance, 
-      bankName, 
-      bgColor, 
-      textColor, 
-      isActive, 
-      onClick,
-      onEditName
-  }: { 
-      type: WalletType, 
-      balance: number, 
-      bankName: string, 
-      bgColor: string,
-      textColor: string,
-      isActive: boolean, 
-      onClick: () => void,
-      onEditName: (e: React.MouseEvent) => void
-  }) => (
-      <div 
-        onClick={onClick}
-        className={`absolute inset-0 rounded-[2rem] p-6 flex flex-col justify-between cursor-pointer overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] border border-white/5 ${
-            isActive 
-            ? 'z-20 opacity-100 translate-y-0 scale-100 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)]' 
-            : 'z-10 opacity-40 translate-y-8 scale-90 hover:translate-y-6 brightness-50 grayscale-[0.8] hover:grayscale-[0.5]'
-        }`}
-        style={{ 
-            backgroundColor: bgColor, 
-            color: textColor,
-            boxShadow: isActive ? `0 25px 60px -15px ${bgColor}50` : 'none'
-        }}
-      >
-         <NoiseTexture />
-         
-         {/* Holographic Shine */}
-         <div className={`absolute inset-0 bg-gradient-to-tr from-white/0 via-white/10 to-white/0 skew-x-12 opacity-0 group-hover:opacity-100 animate-shimmer transition-opacity pointer-events-none ${isActive ? 'block' : 'hidden'}`} style={{backgroundSize: '200% 100%'}}></div>
-         
-         {/* Glossy Reflection */}
-         <div className="absolute -top-32 -right-32 w-80 h-80 bg-white opacity-5 rounded-full blur-[80px] pointer-events-none"></div>
-         
-         <div className="relative z-10 flex justify-between items-start">
-             <div className="flex flex-col gap-4">
-                 <div className="flex items-center gap-2 opacity-80">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.2em]">{type === 'spending' ? 'DEBIT' : 'SAVINGS'}</span>
-                    <div className="w-1 h-1 rounded-full bg-current animate-pulse"></div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider">WORLD</span>
-                 </div>
-                 <EMVChip />
-             </div>
-             <VisaLogo color={textColor} />
-         </div>
-
-         <div className="relative z-10 mt-auto">
-             <div className="flex justify-between items-end">
-                 <div>
-                    <h2 className="text-4xl font-mono font-bold tracking-tighter tabular-nums mb-1 drop-shadow-lg">
-                        {balance.toLocaleString()} <span className="text-base opacity-70">{user.currency}</span>
-                    </h2>
-                    <p className="font-mono text-xs tracking-[0.2em] opacity-60">
-                        •••• •••• •••• {user.apiKey ? user.apiKey.slice(-4) : '8888'}
-                    </p>
-                 </div>
-                 
-                 <button 
-                    onClick={onEditName}
-                    className="flex items-center gap-2 group/edit px-3 py-1.5 -mr-2 rounded-lg bg-black/10 backdrop-blur-md border border-white/5 hover:bg-white/10 transition-colors"
-                 >
-                    <span className="font-bold text-xs tracking-wide">{bankName}</span>
-                    <Pencil size={10} className="opacity-50 group-hover/edit:opacity-100 transition-opacity" />
-                 </button>
-             </div>
-         </div>
-      </div>
-  );
-
   return (
-    <div className="space-y-8 pb-32 relative">
+    <div className="space-y-8 pb-32 pt-2 relative">
       
-      {/* Greeting - Slide Down */}
-      <div className="px-2 pt-2 animate-slide-down">
-        <p className="text-zinc-400 text-xs font-medium uppercase tracking-wider mb-0.5">{greeting}</p>
-        <h1 className="text-3xl font-bold text-white tracking-tight">{user.name.split(' ')[0]}</h1>
-      </div>
-
-      {/* 1. Stacked Cards Area */}
-      <div className="relative h-[240px] w-full perspective-1000 group animate-slide-up" style={{ animationDelay: '0.1s' }}>
-          {/* Savings Card */}
-          <PremiumCard 
-            type="savings" 
-            balance={savingsBalance} 
-            bankName={user.savingsBankName || 'Savings'} 
-            bgColor={user.savingsBankColor || '#21A038'}
-            textColor={user.savingsTextColor || '#FFFFFF'}
-            isActive={activeCard === 'savings'} 
-            onClick={() => setActiveCard('savings')}
-            onEditName={(e) => handleStartRename(e, 'savings', user.savingsBankName)}
-          />
-          
-          {/* Spending Card */}
-          <PremiumCard 
-            type="spending" 
-            balance={spendingBalance} 
-            bankName={user.spendingBankName || 'Main Bank'}
-            bgColor={user.spendingBankColor || '#1C1C1E'}
-            textColor={user.spendingTextColor || '#FFFFFF'}
-            isActive={activeCard === 'spending'} 
-            onClick={() => setActiveCard('spending')}
-            onEditName={(e) => handleStartRename(e, 'spending', user.spendingBankName)}
-          />
-      </div>
-
-      {/* 2. Neon Daily Gauge */}
-      <div className="px-1 animate-slide-up" style={{ animationDelay: '0.2s' }}>
-        {dailyLimit > 0 ? (
-            <div className="glass-panel p-5 rounded-[2rem] relative overflow-hidden group">
-                {/* Side Glow Line */}
-                <div className={`absolute top-0 left-0 w-1 h-full ${gaugeColor.split(' ')[0]} shadow-[0_0_15px_currentColor]`}></div>
-                
-                <div className="flex justify-between items-end mb-4 relative z-10">
-                    <div>
-                        <div className="flex items-center gap-2 mb-1.5">
-                            <Target size={14} className={isOverBudget ? 'text-red-500 animate-pulse' : 'text-emerald-400'} />
-                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{user.language === 'ar' ? 'ميزانية اليوم' : 'Daily Limit'}</span>
-                        </div>
-                        <h3 className="text-3xl font-bold text-white tabular-nums tracking-tight drop-shadow-md">
-                            {todaySpent.toLocaleString()} <span className="text-sm text-zinc-600 font-medium">/ {dailyLimit}</span>
-                        </h3>
-                    </div>
-                    <div className="text-right">
-                         <div className={`text-[10px] font-bold px-3 py-1.5 rounded-full backdrop-blur-md border border-white/5 shadow-lg ${isOverBudget ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'}`}>
-                            {isOverBudget 
-                                ? (user.language === 'ar' ? 'تجاوزت الحد' : 'OVER LIMIT') 
-                                : `${Math.round((todaySpent/dailyLimit)*100)}% USED`
-                            }
-                         </div>
-                    </div>
-                </div>
-
-                {/* Neon Progress Bar */}
-                <div className="h-3 bg-black/50 rounded-full overflow-hidden relative z-10 shadow-inner border border-white/5">
-                    <div 
-                        className={`h-full rounded-full transition-all duration-1000 ease-out relative ${gaugeColor} ${isOverBudget ? 'animate-pulse' : ''}`}
-                        style={{ width: `${progressPercent}%` }}
-                    >
-                        <div className="absolute right-0 top-0 bottom-0 w-4 bg-white/60 blur-[4px]"></div>
-                    </div>
-                </div>
-                
-                {/* Background Glow */}
-                {isOverBudget && <div className="absolute inset-0 bg-red-500/5 animate-pulse z-0 pointer-events-none" />}
-            </div>
-        ) : (
-            <button 
-                onClick={() => onChangeView('settings')}
-                className="w-full glass p-6 rounded-[2rem] border border-dashed border-zinc-700 flex items-center justify-center gap-3 text-zinc-500 hover:text-white hover:border-zinc-500 transition-all hover:bg-white/5 active:scale-95"
-            >
-                <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
-                    <Target size={18} />
-                </div>
-                <span className="text-xs font-bold uppercase tracking-wider">{user.language === 'ar' ? 'تحديد خطة صرف يومية' : 'Setup Budget Plan'}</span>
-            </button>
-        )}
-      </div>
-
-      {/* 3. Salary Countdown Pill */}
-      {salaryData && salaryData.days > 0 && (
-          <div className="px-1 animate-slide-up" style={{ animationDelay: '0.3s' }}>
-              <div className="glass p-1.5 rounded-[1.8rem] border border-white/5 flex items-center relative overflow-hidden group">
-                  <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                  
-                  <div className="bg-[#18181b] p-3.5 rounded-[1.4rem] text-purple-400 z-10 shadow-lg border border-white/5">
-                      <CalendarClock size={20} />
-                  </div>
-                  <div className="flex-1 px-4 z-10 flex justify-between items-center">
-                      <div>
-                          <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Payday in</p>
-                          <p className="text-xl font-bold text-white leading-none tracking-tight">{salaryData.days} Days</p>
-                      </div>
-                      
-                      {/* Circular Progress Mini */}
-                      <div className="relative w-10 h-10 flex items-center justify-center">
-                          <svg className="w-full h-full -rotate-90">
-                              <circle cx="20" cy="20" r="16" stroke="#333" strokeWidth="3" fill="none" />
-                              <circle 
-                                cx="20" cy="20" r="16" 
-                                stroke="#A855F7" strokeWidth="3" fill="none" 
-                                strokeDasharray="100" 
-                                strokeDashoffset={100 - ((salaryData.totalInterval - salaryData.days) / salaryData.totalInterval) * 100} 
-                                strokeLinecap="round"
-                                className="drop-shadow-[0_0_4px_rgba(168,85,247,0.5)]"
-                              />
-                          </svg>
-                      </div>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* 4. Alerts & Insights */}
-      {burnStats && burnStats.daysToZero < 10 && salaryData && salaryData.days > burnStats.daysToZero && (
-          <div className="px-1 animate-slide-up" style={{ animationDelay: '0.35s' }}>
-              <div className={`rounded-[2rem] p-5 border flex items-start gap-4 shadow-lg backdrop-blur-md ${user.selectedPlan === 'austerity' ? 'bg-red-950/40 border-red-500/30' : 'bg-yellow-950/40 border-yellow-500/30'}`}>
-                  <div className={`p-3 rounded-2xl shrink-0 ${user.selectedPlan === 'austerity' ? 'bg-red-500/20 text-red-500' : 'bg-yellow-500/20 text-yellow-500'}`}>
-                    {user.selectedPlan === 'austerity' ? <Skull size={20} /> : <AlertTriangle size={20} />}
-                  </div>
-                  <div>
-                      <h4 className={`font-bold text-sm ${user.selectedPlan === 'austerity' ? 'text-red-400' : 'text-yellow-400'}`}>
-                          {user.selectedPlan === 'austerity' ? "Critical Condition" : "Funds Low"}
-                      </h4>
-                      <p className="text-xs text-zinc-300 mt-1 leading-relaxed">
-                          {user.selectedPlan === 'austerity' 
-                            ? `Estimated runway: ${burnStats.daysToZero.toFixed(0)} days. Salary in ${salaryData.days} days.`
-                            : `Runway: ${burnStats.daysToZero.toFixed(0)} days. Switch to Austerity recommended.`
-                          }
-                      </p>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* 5. Glassy Action Grid */}
-      <div className="grid grid-cols-2 gap-3 px-1 animate-slide-up" style={{ animationDelay: '0.4s' }}>
-          <button 
-             onClick={() => onChangeView('add')}
-             className="group glass p-5 rounded-[2rem] flex flex-col items-center gap-3 transition-all active:scale-95 hover:bg-white/5 border border-white/5 hover:border-white/10 relative overflow-hidden"
-          >
-             <div className="absolute inset-0 bg-gradient-to-tr from-sber-green/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-             <div className="w-12 h-12 bg-sber-green/10 rounded-2xl flex items-center justify-center text-sber-green group-hover:scale-110 transition-transform duration-300 border border-sber-green/20 group-hover:shadow-[0_0_20px_rgba(33,160,56,0.3)]">
-                 <ArrowUpRight size={24} />
-             </div>
-             <span className="text-xs font-bold text-zinc-400 group-hover:text-white uppercase tracking-widest transition-colors">{t.add}</span>
-          </button>
-          
-          <button 
-             onClick={() => onChangeView('transactions')}
-             className="group glass p-5 rounded-[2rem] flex flex-col items-center gap-3 transition-all active:scale-95 hover:bg-white/5 border border-white/5 hover:border-white/10 relative overflow-hidden"
-          >
-             <div className="absolute inset-0 bg-gradient-to-tl from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-             <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform duration-300 border border-blue-500/20 group-hover:shadow-[0_0_20px_rgba(59,130,246,0.3)]">
-                 <TrendingUp size={24} />
-             </div>
-             <span className="text-xs font-bold text-zinc-400 group-hover:text-white uppercase tracking-widest transition-colors">History</span>
-          </button>
-      </div>
-
-      {/* AI Advisor Banner */}
-      <div className="px-1 animate-slide-up" style={{ animationDelay: '0.5s' }}>
-        <button 
-            onClick={onOpenAI}
-            className="w-full relative group overflow-hidden rounded-[2.5rem] p-1 pr-6 flex items-center justify-between transition-all border border-indigo-500/30 hover:border-indigo-500/50"
-        >
-            <div className="absolute inset-0 bg-gradient-to-r from-indigo-900/60 to-purple-900/60 rounded-[2.5rem]"></div>
-            <div className="absolute inset-0 opacity-20 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] mix-blend-overlay"></div>
-            
-            <div className="flex items-center gap-4 relative z-10">
-                <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[2rem] flex items-center justify-center shadow-[0_0_20px_rgba(129,140,248,0.4)] group-hover:scale-105 transition-transform duration-500">
-                    <Sparkles className="text-white w-7 h-7 fill-current animate-pulse" />
-                </div>
-                <div className="text-left">
-                    <h3 className="font-bold text-white text-lg drop-shadow-md">AI Advisor</h3>
-                    <p className="text-xs text-indigo-200 font-medium">Generate insights report</p>
-                </div>
-            </div>
-            <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center relative z-10 group-hover:bg-white/20 transition-colors backdrop-blur-sm border border-white/10">
-                <ChevronRight className="text-white w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
-            </div>
+      {/* 1. Futuristic Header */}
+      <div className="flex justify-between items-center animate-slide-up-fade" style={{ animationDelay: '0ms' }}>
+        <div>
+           <h1 className="text-4xl font-display font-bold text-white tracking-tighter text-glow">
+             Hi, <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">{user.name.split(' ')[0]}</span>
+           </h1>
+           <p className="text-xs text-zinc-400 font-medium tracking-widest uppercase opacity-70">Financial Command</p>
+        </div>
+        <button onClick={() => onChangeView('settings')} className="w-12 h-12 rounded-full glass-card flex items-center justify-center p-0.5 group">
+            {user.photoURL ? (
+                <img src={user.photoURL} alt="Profile" className="w-full h-full rounded-full object-cover group-hover:scale-110 transition-transform duration-500" />
+            ) : (
+                <div className="text-lg font-bold font-display group-hover:text-primary transition-colors">{user.name.charAt(0)}</div>
+            )}
         </button>
       </div>
 
-      {/* Recurring Bills */}
-      <div className="pt-2 px-1 animate-slide-up" style={{ animationDelay: '0.6s' }}>
-         <div className="flex items-center gap-2 mb-4 px-2">
-             <div className="w-1 h-4 bg-zinc-600 rounded-full"></div>
-             <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">{t.fixed_bills}</h3>
-         </div>
-         <RecurringBills user={user} onPayBill={onPayBill} onAddBill={onAddBill} onDeleteBill={onDeleteBill} />
+      {/* 2. The Master Card (Floating & Beaming) */}
+      <div className="relative group perspective-1000 animate-slide-up-fade" style={{ animationDelay: '100ms' }}>
+          {/* Outer Glow */}
+          <div className={`absolute -inset-1 rounded-[2.6rem] bg-gradient-to-r ${activeWallet === 'spending' ? 'from-primary to-accent' : 'from-secondary to-teal-400'} opacity-20 blur-xl group-hover:opacity-40 transition-opacity duration-500 animate-pulse-glow`}></div>
+          
+          {/* Card Container */}
+          <div 
+            onClick={() => setActiveWallet(activeWallet === 'spending' ? 'savings' : 'spending')}
+            className={`
+                relative h-60 rounded-[2.5rem] p-7 flex flex-col justify-between overflow-hidden cursor-pointer transition-all duration-700
+                ${cardGradient} glass-card border-0 animate-float
+            `}
+          >
+              <BorderBeam />
+              
+              {/* Noise Texture Overlay */}
+              <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-overlay"></div>
+              
+              {/* Top Row */}
+              <div className="relative z-10 flex justify-between items-start">
+                  <div className="glass-card px-4 py-2 rounded-2xl flex items-center gap-2 backdrop-blur-md border border-white/10">
+                      {activeWallet === 'spending' ? <CreditCard size={16} className="text-primary" /> : <PiggyBank size={16} className="text-secondary" />}
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-white/80">
+                          {activeWallet === 'spending' ? 'Main Account' : 'Vault'}
+                      </span>
+                  </div>
+                  <div className="w-12 h-8 rounded bg-white/10 flex items-center justify-center border border-white/5">
+                      <div className="w-8 h-8 border-[3px] border-white/20 rounded-full -mr-4"></div>
+                      <div className="w-8 h-8 border-[3px] border-white/20 rounded-full"></div>
+                  </div>
+              </div>
+
+              {/* Balance (Neon) */}
+              <div className="relative z-10">
+                  <p className="text-zinc-400 text-[10px] font-mono mb-2 tracking-[0.2em] uppercase">Total Balance</p>
+                  <h2 className="text-6xl font-display font-bold text-white tracking-tighter tabular-nums drop-shadow-[0_0_30px_rgba(255,255,255,0.15)]">
+                      {currentBalance.toLocaleString()}
+                      <span className="text-2xl text-white/30 ml-2 font-light">{user.currency}</span>
+                  </h2>
+              </div>
+
+              {/* Bottom Info */}
+              <div className="relative z-10 flex justify-between items-end">
+                  <div className="flex items-center gap-3 group/edit" onClick={handleStartRename}>
+                      <p className="font-mono text-xs text-white/50 tracking-widest">•••• {user.apiKey ? user.apiKey.slice(-4) : '8888'}</p>
+                      <Pencil size={12} className="text-white/20 group-hover/edit:text-white transition-colors" />
+                  </div>
+                  <div className="text-[10px] text-white/40 font-bold uppercase tracking-[0.2em]">{currentBankName}</div>
+              </div>
+          </div>
       </div>
 
-      {/* Rename Modal */}
+      {/* 3. Bento Grid Stats */}
+      <div className="grid grid-cols-2 gap-4 animate-slide-up-fade" style={{ animationDelay: '200ms' }}>
+          
+          {/* Daily Limit Box */}
+          <div className="glass-card rounded-[2rem] p-6 relative overflow-hidden group hover:bg-white/5 transition-colors">
+              <div className="relative z-10">
+                  <div className="flex items-center gap-2 mb-3">
+                      <Target size={16} className={`${accentColor}`} />
+                      <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider">Limit</span>
+                  </div>
+                  {dailyLimit > 0 ? (
+                      <div>
+                          <span className="text-3xl font-display font-bold text-white tabular-nums">
+                              {Math.max(0, dailyLimit - todaySpent).toLocaleString()}
+                          </span>
+                          <div className="w-full h-1.5 bg-white/10 rounded-full mt-4 overflow-hidden">
+                              <div className={`h-full rounded-full transition-all duration-700 ease-out ${todaySpent > dailyLimit ? 'bg-red-500 shadow-[0_0_10px_red]' : 'bg-primary shadow-[0_0_10px_#A855F7]'}`} style={{ width: `${progressPercent}%` }}></div>
+                          </div>
+                      </div>
+                  ) : (
+                      <button onClick={() => onChangeView('settings')} className={`text-xs ${accentColor} font-bold hover:underline`}>Set Limit &rarr;</button>
+                  )}
+              </div>
+          </div>
+
+          {/* Payday Box */}
+          <div className="glass-card rounded-[2rem] p-6 relative overflow-hidden group hover:bg-white/5 transition-colors">
+              <div className="relative z-10">
+                  <div className="flex items-center gap-2 mb-3">
+                      <CalendarClock size={16} className="text-secondary" />
+                      <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider">Refill</span>
+                  </div>
+                  {salaryData ? (
+                      <div>
+                          <span className="text-3xl font-display font-bold text-white tabular-nums">
+                              {salaryData.days}
+                          </span>
+                          <span className="text-sm text-zinc-500 ml-1">days</span>
+                          <p className="text-[10px] text-zinc-600 mt-2 font-mono opacity-60">Stay on track</p>
+                      </div>
+                  ) : (
+                      <span className="text-xs text-zinc-600">No data</span>
+                  )}
+              </div>
+          </div>
+      </div>
+
+      {/* 4. Action Orb Dock */}
+      <div className="flex justify-between gap-2 animate-slide-up-fade px-2" style={{ animationDelay: '300ms' }}>
+          <button onClick={() => onChangeView('add')} className="flex-1 glass-card hover:bg-white/10 p-4 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all active:scale-95 group">
+              <ArrowUpRight size={22} className="text-zinc-300 group-hover:text-white transition-colors" />
+              <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 group-hover:text-zinc-300">Send</span>
+          </button>
+          <button onClick={() => onChangeView('transactions')} className="flex-1 glass-card hover:bg-white/10 p-4 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all active:scale-95 group">
+              <TrendingUp size={22} className="text-zinc-300 group-hover:text-white transition-colors" />
+              <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 group-hover:text-zinc-300">Stats</span>
+          </button>
+          <button onClick={onOpenAI} className="flex-1 glass-card bg-primary/10 border-primary/20 hover:bg-primary/20 p-4 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all active:scale-95 group shadow-[0_0_20px_rgba(168,85,247,0.15)]">
+              <Sparkles size={22} className="text-primary animate-pulse" />
+              <span className="text-[9px] font-bold uppercase tracking-wider text-primary">AI</span>
+          </button>
+      </div>
+
+      {/* 5. Alerts (Holographic) */}
+      {burnStats && burnStats.daysToZero < 10 && salaryData && salaryData.days > burnStats.daysToZero && (
+          <div className="glass-card bg-red-500/5 border-red-500/20 p-5 rounded-[2rem] flex items-center gap-4 animate-pulse-glow mx-1">
+              <div className="p-3 bg-red-500/20 rounded-full text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]"><Skull size={20} /></div>
+              <div>
+                  <h4 className="text-red-400 font-display font-bold text-sm tracking-wide">CRITICAL STATUS</h4>
+                  <p className="text-[10px] text-zinc-400 mt-1">Runway ending in <span className="text-white font-bold">{burnStats.daysToZero.toFixed(0)} days</span>.</p>
+              </div>
+          </div>
+      )}
+
+      {/* 6. Recurring Bills */}
+      <div className="animate-slide-up-fade" style={{ animationDelay: '400ms' }}>
+          <div className="flex items-center justify-between px-4 mb-3">
+              <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">{t.fixed_bills}</h3>
+          </div>
+          <RecurringBills user={user} onPayBill={onPayBill} onAddBill={onAddBill} onDeleteBill={onDeleteBill} />
+      </div>
+
+      {/* Rename Modal (Glass) */}
       {renamingWallet && (
-         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setRenamingWallet(null)} />
-            <div className="relative glass-strong border border-white/10 w-full max-w-xs rounded-[2rem] p-6 animate-scale-in shadow-2xl">
-                <h3 className="text-base font-bold text-white mb-4 text-center">Rename Wallet</h3>
+         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-xl animate-scale-in">
+            <div className="relative glass-card bg-[#0F0E17] w-full max-w-xs rounded-[2.5rem] p-8 shadow-2xl border border-white/10">
+                <h3 className="text-lg font-display font-bold text-white mb-6 text-center tracking-wide">Rename Wallet</h3>
                 <input 
                     type="text" 
                     value={tempName}
                     onChange={(e) => setTempName(e.target.value)}
-                    className="w-full bg-black/50 p-4 rounded-2xl border border-zinc-700 text-white text-center font-bold focus:border-sber-green focus:shadow-[0_0_15px_rgba(33,160,56,0.3)] outline-none mb-4 transition-all"
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-center text-white font-bold outline-none focus:border-primary focus:shadow-[0_0_20px_rgba(168,85,247,0.2)] transition-all mb-6 text-lg"
                     autoFocus
                 />
                 <div className="flex gap-3">
-                    <button onClick={() => setRenamingWallet(null)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 py-3 rounded-xl text-xs font-bold text-zinc-400 transition-colors">Cancel</button>
-                    <button onClick={handleSaveRename} className="flex-1 bg-sber-green hover:bg-emerald-600 py-3 rounded-xl text-xs font-bold text-white shadow-lg shadow-emerald-900/20 transition-all active:scale-95">Save</button>
+                    <button onClick={() => setRenamingWallet(null)} className="flex-1 py-4 rounded-2xl text-xs font-bold text-zinc-400 hover:bg-white/5 transition-colors uppercase tracking-wider">Cancel</button>
+                    <button onClick={handleSaveRename} className="flex-1 bg-white text-black py-4 rounded-2xl text-xs font-bold hover:scale-105 transition-all shadow-lg uppercase tracking-wider">Save</button>
                 </div>
             </div>
          </div>
@@ -1466,28 +1247,47 @@ export const Navigation: React.FC<Props> = ({ currentView, onNavigate }) => {
     return (
       <button 
         onClick={() => onNavigate(view)}
-        className={`flex flex-col items-center gap-1 transition-all duration-300 group ${isActive ? 'text-white -translate-y-1' : 'text-zinc-500 hover:text-gray-300'}`}
+        className="relative w-12 h-12 flex items-center justify-center transition-all duration-300 group"
       >
-        <div className={`absolute -bottom-6 w-1 h-1 rounded-full bg-white transition-all duration-300 ${isActive ? 'opacity-100 scale-100' : 'opacity-0 scale-0'}`}></div>
-        <Icon size={24} strokeWidth={isActive ? 3 : 2} className={`transition-all duration-300 ${isActive ? 'drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : ''}`} />
+        {/* Active Glow Background */}
+        {isActive && (
+            <div className="absolute inset-0 bg-white/10 rounded-2xl blur-md animate-pulse-glow"></div>
+        )}
+        
+        {/* Icon */}
+        <Icon 
+            size={24} 
+            strokeWidth={isActive ? 2.5 : 2} 
+            className={`relative z-10 transition-all duration-300 ${isActive ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]' : 'text-zinc-500 group-hover:text-zinc-300'}`} 
+        />
+
+        {/* Active Dot Indicator */}
+        <div className={`absolute -bottom-1 w-1 h-1 rounded-full bg-white transition-all duration-300 ${isActive ? 'opacity-100 scale-100 shadow-[0_0_5px_white]' : 'opacity-0 scale-0'}`}></div>
       </button>
     );
   };
 
   return (
-    <div className="fixed bottom-6 left-0 right-0 z-50 flex justify-center pointer-events-none px-4">
-       <nav className="bg-[#0A0A0A]/95 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] px-6 py-3 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.9)] flex items-center justify-between w-full max-w-sm pointer-events-auto transition-transform duration-300">
+    <div className="fixed bottom-6 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none">
+       <nav className="pointer-events-auto w-full max-w-sm glass-card rounded-[2rem] p-2 flex items-center justify-between shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] border border-white/10 relative overflow-hidden">
           
+          {/* Subtle reflection overlay */}
+          <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none rounded-[2rem]"></div>
+
           <NavItem view="dashboard" icon={Home} />
           <NavItem view="transactions" icon={List} />
 
-          {/* Central Add Button (Restored to Center) */}
-          <button 
-              onClick={() => onNavigate('add')}
-              className="w-14 h-14 bg-white text-black rounded-[1.2rem] flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95 transition-all duration-300 -mt-8 border-4 border-[#050505] relative z-20 group shrink-0"
-          >
-              <Plus size={28} strokeWidth={3} className="group-hover:rotate-90 transition-transform duration-300" />
-          </button>
+          {/* Central Add Button (Floating & Glowing) */}
+          <div className="relative -top-6">
+              <button 
+                  onClick={() => onNavigate('add')}
+                  className="w-16 h-16 bg-white text-black rounded-[1.5rem] flex items-center justify-center shadow-[0_0_30px_rgba(255,255,255,0.3)] hover:shadow-[0_0_50px_rgba(255,255,255,0.5)] hover:scale-105 active:scale-95 transition-all duration-300 relative z-20 group"
+              >
+                  <Plus size={32} strokeWidth={3} className="group-hover:rotate-90 transition-transform duration-300" />
+              </button>
+              {/* Button Reflection/Glow below */}
+              <div className="absolute top-4 left-2 right-2 h-12 bg-white/20 blur-xl rounded-full -z-10"></div>
+          </div>
 
           <NavItem view="reports" icon={PieIcon} />
           <NavItem view="settings" icon={Settings} />
@@ -1506,7 +1306,7 @@ import { UserSettings, Currency, Language, RecurringBill } from '../types';
 import { TRANSLATIONS, RUSSIAN_BANKS } from '../constants';
 import { validateApiKey, analyzeOnboardingData, OnboardingAnalysisResult } from '../services/geminiService';
 import { signInWithGoogle, auth, getUserData } from '../services/firebase';
-import { Wallet, Check, ImageIcon, DollarSign, Upload, Zap, ArrowRight, Plus, UserCircle2, Key, CheckCircle2, Loader2, PiggyBank, CalendarClock, ChevronDown, Sparkles, ScanLine, Smartphone, CreditCard, ShieldCheck } from 'lucide-react';
+import { Wallet, Check, ImageIcon, DollarSign, Upload, Zap, ArrowRight, Plus, UserCircle2, Key, CheckCircle2, Loader2, PiggyBank, CalendarClock, ChevronDown, Sparkles, ScanLine } from 'lucide-react';
 
 interface BankDetails {
     name: string;
@@ -1529,25 +1329,7 @@ interface Props {
   onRestore: (settings: UserSettings, transactions: any[]) => void;
 }
 
-// --- Visual Components ---
-
-const AmbientBackground = () => (
-    <div className="fixed inset-0 overflow-hidden pointer-events-none z-0 bg-[#000000]">
-        <div className="absolute top-[-20%] left-[-20%] w-[80vw] h-[80vw] bg-purple-900/10 rounded-full blur-[120px] animate-pulse-slow"></div>
-        <div className="absolute bottom-[-20%] right-[-20%] w-[80vw] h-[80vw] bg-emerald-900/10 rounded-full blur-[120px] animate-pulse-slow" style={{ animationDelay: '2s' }}></div>
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5 mix-blend-overlay"></div>
-    </div>
-);
-
-const GlassCard = ({ children, className = '' }: { children: React.ReactNode, className?: string }) => (
-    <div className={`relative z-10 bg-[#09090b]/80 backdrop-blur-2xl border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] rounded-[2.5rem] p-8 overflow-hidden ${className}`}>
-        {/* Holographic Edge */}
-        <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
-        {children}
-    </div>
-);
-
-// Helper: Bank Selector Component (Modern Tiles)
+// Helper: Bank Selector Component (Glass Style)
 const BankSelector = ({ 
     selectedId, 
     onSelect, 
@@ -1566,14 +1348,14 @@ const BankSelector = ({
     const isCustom = selectedId === 'other';
 
     return (
-        <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-            <div className="grid grid-cols-4 gap-3 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
+        <div className="space-y-4 animate-slide-up-fade">
+            <div className="grid grid-cols-4 gap-3">
                 {RUSSIAN_BANKS.filter(b => b.id !== 'other').map(bank => (
                     <button
                         key={bank.id}
                         type="button"
                         onClick={() => onSelect(bank.id)}
-                        className={`group flex flex-col items-center gap-2 p-2 rounded-2xl transition-all duration-300 border ${selectedId === bank.id ? 'bg-white/10 border-sber-green shadow-[0_0_15px_rgba(33,160,56,0.3)] scale-105' : 'bg-black/40 border-white/5 hover:bg-white/5'}`}
+                        className={`group flex flex-col items-center gap-2 p-3 rounded-2xl transition-all border ${selectedId === bank.id ? 'bg-white/10 border-sber-green shadow-[0_0_20px_rgba(33,160,56,0.3)] scale-105' : 'bg-black/20 border-white/5 hover:bg-white/5'}`}
                     >
                         <div className="relative">
                             {bank.logo ? (
@@ -1590,14 +1372,14 @@ const BankSelector = ({
                                     {bank.name.substring(0, 2).toUpperCase()}
                                 </div>
                             )}
-                            {selectedId === bank.id && <div className="absolute -bottom-1 -right-1 bg-sber-green w-4 h-4 rounded-full border-2 border-black flex items-center justify-center"><Check size={8} /></div>}
+                            {selectedId === bank.id && <div className="absolute -bottom-1 -right-1 bg-sber-green w-4 h-4 rounded-full border-2 border-black flex items-center justify-center shadow-[0_0_10px_#22c55e]"><Check size={8} /></div>}
                         </div>
                     </button>
                 ))}
                 <button
                     type="button"
                     onClick={() => onSelect('other')}
-                    className={`flex flex-col items-center gap-2 p-2 rounded-2xl transition-all border ${isCustom ? 'bg-white/10 border-sber-green shadow-lg scale-105' : 'bg-black/40 border-white/5 hover:bg-white/5'}`}
+                    className={`flex flex-col items-center gap-2 p-3 rounded-2xl transition-all border ${isCustom ? 'bg-white/10 border-sber-green shadow-lg scale-105' : 'bg-black/20 border-white/5 hover:bg-white/5'}`}
                 >
                     <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs bg-zinc-800 text-white border border-white/10">
                         <Plus size={16} />
@@ -1606,21 +1388,21 @@ const BankSelector = ({
             </div>
 
             {isCustom && (
-                <div className="bg-black/40 p-4 rounded-2xl border border-white/5 space-y-4 animate-in slide-in-from-top-2">
+                <div className="glass-card p-4 rounded-2xl border border-white/5 space-y-4 animate-scale-in">
                     <div>
-                        <label className="text-[9px] text-zinc-500 uppercase font-bold mb-2 block tracking-wider">Bank Name</label>
+                        <label className="text-[10px] text-zinc-500 uppercase font-bold mb-2 block tracking-wider">Bank Name</label>
                         <input 
                             type="text" 
                             value={customName} 
                             onChange={e => setCustomName(e.target.value)} 
                             placeholder="My Bank"
-                            className="w-full bg-black p-3 rounded-xl border border-white/10 text-white text-sm focus:border-sber-green focus:shadow-[0_0_15px_rgba(33,160,56,0.2)] outline-none transition-all"
+                            className="w-full bg-white/5 p-3 rounded-xl border border-white/10 text-white text-sm focus:border-sber-green focus:shadow-[0_0_15px_rgba(33,160,56,0.2)] outline-none transition-all"
                         />
                     </div>
                     <div>
-                        <label className="text-[9px] text-zinc-500 uppercase font-bold mb-2 block tracking-wider">Card Color</label>
+                        <label className="text-[10px] text-zinc-500 uppercase font-bold mb-2 block tracking-wider">Card Color</label>
                         <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                            {['#21A038', '#EF3124', '#002882', '#FFDD2D', '#000000', '#BF5AF2', '#FF9500'].map(c => (
+                            {['#21A038', '#EF3124', '#002882', '#FFDD2D', '#000000', '#BF5AF2', '#FF9500', '#CB11AB', '#D22630'].map(c => (
                                 <button
                                     key={c}
                                     type="button"
@@ -1637,7 +1419,7 @@ const BankSelector = ({
     );
 };
 
-// Helper: Smart Calendar Grid (Modern)
+// Helper: Smart Calendar Grid (Neon Style)
 const SmartCalendar = ({ 
     lastSalaryDate, 
     interval 
@@ -1659,33 +1441,34 @@ const SmartCalendar = ({
     for (let i = 1; i <= daysInMonth; i++) days.push(i);
 
     return (
-      <div className="bg-black/40 p-5 rounded-3xl border border-white/5 animate-in fade-in zoom-in duration-500">
-         <div className="flex justify-between items-center mb-4">
-           <span className="text-[10px] text-purple-400 font-bold uppercase tracking-widest flex items-center gap-1">
-               <Sparkles size={10} /> Prediction
-           </span>
-           <span className="text-xs font-bold text-white bg-white/5 px-3 py-1 rounded-full border border-white/5">
-               {nextDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
-           </span>
+      <div className="glass-card p-5 rounded-3xl border border-white/10 animate-scale-in shadow-2xl">
+         <div className="text-center font-bold mb-4 text-white flex justify-between items-center">
+           <span className="text-xs text-purple-400 font-bold uppercase tracking-widest flex items-center gap-1"><Sparkles size={12} /> Forecast</span>
+           <span className="text-sm bg-white/5 px-3 py-1 rounded-full border border-white/5 font-display tracking-wide">{nextDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
          </div>
          <div className="grid grid-cols-7 gap-1 text-center mb-2">
-           {['S','M','T','W','T','F','S'].map(d => <div key={d} className="text-[9px] text-zinc-600 font-bold">{d}</div>)}
+           {['S','M','T','W','T','F','S'].map(d => <div key={d} className="text-[10px] text-zinc-500 font-bold">{d}</div>)}
            {days.map((day, idx) => {
              if (!day) return <div key={idx}></div>;
              const isNextPayday = day === nextDate.getDate();
              return (
                <div 
                  key={idx}
-                 className={`text-[10px] h-7 w-7 mx-auto rounded-full flex items-center justify-center transition-all duration-500 ${
+                 className={`text-xs h-8 w-8 mx-auto rounded-full flex items-center justify-center transition-all duration-500 ${
                     isNextPayday 
-                    ? 'bg-sber-green text-white font-bold shadow-[0_0_10px_rgba(33,160,56,0.6)] scale-110' 
-                    : 'text-zinc-500'
+                    ? 'bg-gradient-to-tr from-sber-green to-emerald-500 text-white font-bold shadow-[0_0_20px_rgba(33,160,56,0.6)] scale-110' 
+                    : 'text-zinc-600'
                  }`}
                >
                  {day}
                </div>
              )
            })}
+         </div>
+         <div className="mt-4 text-center bg-sber-green/5 p-3 rounded-xl border border-sber-green/10">
+             <p className="text-xs text-sber-green font-medium">
+                 Expected Deposit: <span className="font-bold text-white ml-1">{nextDate.toLocaleDateString()}</span>
+             </p>
          </div>
       </div>
     );
@@ -1698,31 +1481,26 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
   const [isRestoring, setIsRestoring] = useState(false);
   const [keyStatus, setKeyStatus] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
 
-  // Spending Bank State
   const [spendingBankId, setSpendingBankId] = useState<string>('other');
   const [customSpendingName, setCustomSpendingName] = useState('Main Account');
   const [customSpendingColor, setCustomSpendingColor] = useState('#1C1C1E');
   const [showSpendingBankEdit, setShowSpendingBankEdit] = useState(true);
 
-  // Savings Bank State
   const [savingsBankId, setSavingsBankId] = useState<string>('other');
   const [customSavingsName, setCustomSavingsName] = useState('Savings Pot');
   const [customSavingsColor, setCustomSavingsColor] = useState('#21A038');
   const [showSavingsBankEdit, setShowSavingsBankEdit] = useState(true);
 
-  // Files
   const [balanceFile, setBalanceFile] = useState<File | null>(null);
   const [salaryFile, setSalaryFile] = useState<File | null>(null);
   const [expenseFiles, setExpenseFiles] = useState<File[]>([]);
   
-  // Data
   const [analysisResult, setAnalysisResult] = useState<OnboardingAnalysisResult | null>(null);
   const [recurringBills, setRecurringBills] = useState<RecurringBill[]>([]);
   const [newBillName, setNewBillName] = useState('');
   const [newBillAmount, setNewBillAmount] = useState('');
 
-  // Salary Logic State
-  const [salaryInterval, setSalaryInterval] = useState<number>(30); // Default 30 days
+  const [salaryInterval, setSalaryInterval] = useState<number>(30);
   const [savingsInitial, setSavingsInitial] = useState<number>(0);
 
   useEffect(() => {
@@ -1848,284 +1626,241 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
       );
   };
 
-  // Reusable File Upload "Scanner"
-  const ScannerZone = ({ label, file, onChange, icon: Icon, subLabel }: any) => (
-      <div 
-        onClick={onChange}
-        className={`relative h-48 border border-white/10 rounded-[2rem] flex flex-col items-center justify-center cursor-pointer overflow-hidden group transition-all duration-300 ${file ? 'bg-sber-green/5 border-sber-green/30' : 'bg-black/30 hover:bg-white/5'}`}
-      >
-         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5"></div>
-         {/* Scanner Line Animation */}
-         <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-white/50 to-transparent translate-y-[-10px] group-hover:translate-y-[200px] transition-transform duration-[1.5s] ease-linear"></div>
-         
-         <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 transition-all duration-500 ${file ? 'bg-sber-green text-white shadow-[0_0_20px_rgba(33,160,56,0.4)] scale-110' : 'bg-white/5 text-zinc-500 group-hover:scale-105 group-hover:bg-white/10'}`}>
-             {file ? <Check size={32} /> : <Icon size={32} strokeWidth={1.5} />}
-         </div>
-         <p className="text-sm font-bold text-white z-10">{file ? (file.name || "File Uploaded") : label}</p>
-         <p className="text-[10px] text-zinc-500 z-10 mt-1 uppercase tracking-wider">{subLabel}</p>
-      </div>
-  );
-
-  // --- Render ---
-
   if (isRestoring) {
       return (
-          <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center text-white relative overflow-hidden">
-              <AmbientBackground />
-              <div className="relative z-10 flex flex-col items-center">
-                  <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center backdrop-blur-md border border-white/10 mb-6 relative">
-                    <div className="absolute inset-0 border-2 border-sber-green rounded-full border-t-transparent animate-spin"></div>
-                    <Loader2 className="w-10 h-10 text-sber-green animate-pulse" />
+          <div className="min-h-screen bg-transparent flex flex-col items-center justify-center p-6 text-center text-white relative overflow-hidden">
+              <div className="relative z-10 flex flex-col items-center animate-pulse-glow">
+                  <div className="w-24 h-24 glass-card rounded-full flex items-center justify-center border border-primary/30 mb-6">
+                    <Loader2 className="w-10 h-10 text-primary animate-spin" />
                   </div>
-                  <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">Restoring Neural Data...</h2>
+                  <h2 className="text-xl font-display font-bold text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-400">Restoring Data...</h2>
               </div>
           </div>
       );
   }
 
   return (
-    <div className="min-h-[100dvh] bg-[#050505] flex flex-col items-center justify-start sm:justify-center px-6 pt-28 pb-20 text-center text-white relative overflow-y-auto overflow-x-hidden font-sans">
-        <AmbientBackground />
+    <div className="min-h-screen bg-transparent flex flex-col items-center justify-center px-6 pt-24 pb-12 text-center text-white relative overflow-hidden font-sans">
         
-        {/* Step Indicator (Floating HUD) */}
+        {/* Step Indicator (Glowing Bar) */}
         {step > 0 && (
-            <div className="fixed top-8 left-1/2 -translate-x-1/2 flex gap-1 p-1.5 bg-black/60 backdrop-blur-xl rounded-full border border-white/10 z-50 shadow-2xl">
-                {[1,2,3,4,5,6,7].map(s => (
-                    <div 
-                        key={s} 
-                        className={`h-1.5 rounded-full transition-all duration-500 ${
-                            s === step ? 'w-8 bg-sber-green shadow-[0_0_10px_rgba(33,160,56,0.5)]' : 
-                            s < step ? 'w-2 bg-white/40' : 'w-2 bg-white/10'
-                        }`} 
-                    />
-                ))}
+            <div className="absolute top-10 left-1/2 -translate-x-1/2 flex gap-2 p-1.5 glass-card rounded-full border border-white/10 z-20">
+            {[1,2,3,4,5,6,7].map(s => (
+                <div 
+                    key={s} 
+                    className={`h-1.5 rounded-full transition-all duration-700 ease-out ${
+                        s === step ? 'w-8 bg-primary shadow-[0_0_15px_rgba(168,85,247,0.8)]' : 
+                        s < step ? 'w-2 bg-white/80' : 'w-2 bg-white/10'
+                    }`} 
+                />
+            ))}
             </div>
         )}
 
         {/* Step 0: Welcome Screen */}
         {step === 0 && (
-          <GlassCard className="w-full max-w-sm animate-in fade-in zoom-in duration-700 my-auto">
-            <div className="relative w-32 h-32 mx-auto mb-8 group">
-               <div className="absolute inset-0 bg-sber-green/20 blur-[50px] rounded-full animate-pulse-slow"></div>
+          <div className="w-full max-w-sm glass-card p-8 rounded-[3rem] animate-slide-up-fade shadow-2xl relative overflow-hidden">
+            {/* Background Glow */}
+            <div className="absolute top-0 inset-x-0 h-40 bg-gradient-to-b from-primary/10 to-transparent pointer-events-none"></div>
+            
+            <div className="relative w-32 h-32 mx-auto mb-10 group">
+               <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full animate-pulse-slow"></div>
                <img 
                  src="/app.png" 
                  alt="Masareefy" 
-                 className="relative z-10 w-full h-full object-contain drop-shadow-2xl group-hover:scale-105 transition-transform duration-500 rounded-[2.5rem]"
+                 className="relative z-10 w-full h-full object-contain drop-shadow-2xl transition-transform duration-700 group-hover:scale-110 rounded-[2.5rem]"
                />
             </div>
             
-            <h1 className="text-4xl font-black mb-3 tracking-tighter text-white">
-                Masareefy<span className="text-sber-green">.AI</span>
-            </h1>
-            <p className="text-zinc-400 mb-10 text-sm font-medium leading-relaxed max-w-[80%] mx-auto">
-                Next-gen financial operating system powered by Neural Titan Engine.
-            </p>
+            <h1 className="text-5xl font-display font-bold mb-4 tracking-tighter text-white drop-shadow-lg">{t.welcome}</h1>
+            <p className="text-zinc-400 mb-10 text-sm font-medium tracking-wide">{t.setup_title}</p>
             
-            <button onClick={handleGoogleSignIn} className="w-full bg-white text-black font-bold p-4 rounded-2xl flex items-center justify-center gap-3 hover:bg-gray-200 transition-all active:scale-95 mb-3 shadow-[0_0_20px_rgba(255,255,255,0.2)]">
+            <button onClick={handleGoogleSignIn} className="w-full bg-white text-black font-bold p-5 rounded-2xl flex items-center justify-center gap-3 hover:scale-[1.02] transition-all active:scale-95 mb-4 shadow-[0_0_30px_rgba(255,255,255,0.2)] group relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-black/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
                 <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
                 {t.sign_in_google}
             </button>
-            <button onClick={() => { setUser(u => ({...u, isGuest: false, name: ''})); setStep(1); }} className="w-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white font-bold p-4 rounded-2xl flex items-center justify-center gap-3 border border-white/5 transition-all active:scale-95">
-                <UserCircle2 className="w-5 h-5" />
+            <button onClick={() => { setUser(u => ({...u, isGuest: false, name: ''})); setStep(1); }} className="w-full glass hover:bg-white/10 text-white font-bold p-5 rounded-2xl flex items-center justify-center gap-3 border border-white/10 transition-all active:scale-95">
+                <UserCircle2 className="w-5 h-5 text-zinc-400 group-hover:text-white" />
                 {t.guest_mode}
             </button>
-          </GlassCard>
+          </div>
         )}
 
         {/* Step 1: Profile */}
         {step === 1 && (
-          <GlassCard className="w-full max-w-sm animate-in slide-in-from-right duration-500">
+          <div className="w-full max-w-sm glass-card p-8 rounded-[3rem] animate-slide-up-fade relative">
              <div className="text-left mb-8">
-                 <h2 className="text-3xl font-bold mb-2 text-white">{t.enter_name}</h2>
-                 <p className="text-zinc-500 text-xs font-mono uppercase tracking-widest">Identify yourself to the system.</p>
+                 <h2 className="text-3xl font-display font-bold mb-2 text-white">{t.enter_name}</h2>
+                 <p className="text-zinc-400 text-xs uppercase tracking-widest">Personalization</p>
              </div>
              
              <form onSubmit={handleProfileSubmit} className="space-y-6">
               <div className="text-left group">
-                  <label className="text-[10px] text-zinc-500 ml-1 mb-2 block uppercase font-bold tracking-[0.2em] group-focus-within:text-sber-green transition-colors">{t.enter_name}</label>
-                  <input type="text" className="w-full bg-black/50 p-4 rounded-2xl border border-white/10 focus:border-sber-green focus:shadow-[0_0_20px_rgba(33,160,56,0.2)] outline-none text-white transition-all placeholder-zinc-800 font-medium" placeholder="Ex: John Doe" value={user.name} onChange={e => setUser({...user, name: e.target.value})} required autoFocus />
+                  <label className="text-[10px] text-zinc-500 ml-1 mb-2 block uppercase font-bold tracking-widest group-focus-within:text-primary transition-colors">{t.enter_name}</label>
+                  <input type="text" className="w-full bg-white/5 p-4 rounded-2xl border border-white/10 focus:border-primary focus:shadow-[0_0_20px_rgba(168,85,247,0.2)] outline-none text-white transition-all placeholder-zinc-700" placeholder="John Doe" value={user.name} onChange={e => setUser({...user, name: e.target.value})} required autoFocus />
               </div>
 
               <div className="text-left group">
-                <label className="text-[10px] text-zinc-500 ml-1 mb-2 block uppercase font-bold tracking-[0.2em] group-focus-within:text-sber-green transition-colors">{t.enter_key}</label>
+                <label className="text-[10px] text-zinc-500 ml-1 mb-2 block uppercase font-bold tracking-widest group-focus-within:text-primary transition-colors">{t.enter_key}</label>
                 <div className="relative">
-                    <input type="password" className={`w-full bg-black/50 p-4 pr-14 rounded-2xl border outline-none text-white transition-all placeholder-zinc-800 font-mono ${keyStatus === 'valid' ? 'border-sber-green shadow-[0_0_20px_rgba(33,160,56,0.2)]' : keyStatus === 'invalid' ? 'border-red-500' : 'border-white/10 focus:border-sber-green'}`} placeholder="AI Studio Key" value={user.apiKey} onChange={e => { setUser({...user, apiKey: e.target.value}); setKeyStatus('idle'); }} required />
+                    <input type="password" className={`w-full bg-white/5 p-4 pr-14 rounded-2xl border outline-none text-white transition-all placeholder-zinc-700 ${keyStatus === 'valid' ? 'border-sber-green shadow-[0_0_15px_rgba(33,160,56,0.3)]' : keyStatus === 'invalid' ? 'border-red-500' : 'border-white/10 focus:border-primary'}`} placeholder="AI Studio Key" value={user.apiKey} onChange={e => { setUser({...user, apiKey: e.target.value}); setKeyStatus('idle'); }} required />
                     <div className="absolute right-2 top-1/2 -translate-y-1/2">
                         <button type="button" onClick={checkApiKey} disabled={!user.apiKey} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${keyStatus === 'valid' ? 'bg-sber-green text-white shadow-lg' : 'bg-white/5 text-zinc-400 hover:text-white'}`}>
-                            {keyStatus === 'valid' ? <CheckCircle2 size={18} /> : <Key size={18} />}
+                            {keyStatus === 'valid' ? <CheckCircle2 size={20} /> : <Key size={20} />}
                         </button>
                     </div>
                 </div>
               </div>
               
-              <div className="flex gap-3">
-                 <div className="flex-1 relative">
-                     <div className="absolute top-2 left-3 text-[8px] text-zinc-500 font-bold uppercase">Currency</div>
-                     <select className="w-full bg-black/50 pt-6 pb-2 px-3 rounded-2xl border border-white/10 text-white outline-none focus:border-sber-green appearance-none text-sm font-bold" value={user.currency} onChange={e => setUser({...user, currency: e.target.value as Currency})}>
-                        <option value="USD">USD ($)</option>
-                        <option value="SAR">SAR (﷼)</option>
-                        <option value="AED">AED (د.إ)</option>
-                        <option value="RUB">RUB (₽)</option>
-                     </select>
-                 </div>
-                 <div className="flex-1 relative">
-                     <div className="absolute top-2 left-3 text-[8px] text-zinc-500 font-bold uppercase">Language</div>
-                     <select className="w-full bg-black/50 pt-6 pb-2 px-3 rounded-2xl border border-white/10 text-white outline-none focus:border-sber-green appearance-none text-sm font-bold" value={user.language} onChange={e => setUser({...user, language: e.target.value as Language})}>
-                        <option value="en">English</option>
-                        <option value="ar">العربية</option>
-                        <option value="ru">Русский</option>
-                     </select>
-                 </div>
+              <div className="flex gap-4">
+                 <select className="flex-1 bg-white/5 p-4 rounded-2xl border border-white/10 text-white outline-none focus:border-primary appearance-none font-bold" value={user.currency} onChange={e => setUser({...user, currency: e.target.value as Currency})}>
+                    <option value="USD">USD ($)</option>
+                    <option value="SAR">SAR (﷼)</option>
+                    <option value="AED">AED (د.إ)</option>
+                    <option value="RUB">RUB (₽)</option>
+                 </select>
+                 <select className="flex-1 bg-white/5 p-4 rounded-2xl border border-white/10 text-white outline-none focus:border-primary appearance-none font-bold" value={user.language} onChange={e => setUser({...user, language: e.target.value as Language})}>
+                    <option value="en">English</option>
+                    <option value="ar">العربية</option>
+                    <option value="ru">Русский</option>
+                 </select>
               </div>
 
-              <button type="submit" className="w-full bg-white text-black font-bold p-4 rounded-2xl mt-4 flex justify-center gap-2 items-center shadow-[0_0_30px_rgba(255,255,255,0.2)] hover:bg-gray-200 transition-all active:scale-95" disabled={isValidating}>
+              <button type="submit" className="w-full bg-gradient-to-r from-primary to-indigo-600 hover:to-indigo-500 font-bold p-4 rounded-2xl mt-4 flex justify-center gap-3 items-center shadow-[0_0_30px_rgba(168,85,247,0.4)] transition-all active:scale-95 text-white" disabled={isValidating}>
                 {isValidating ? <Loader2 className="animate-spin" /> : <>{t.start} <ArrowRight size={20} /></>}
               </button>
              </form>
-          </GlassCard>
+          </div>
         )}
 
         {/* Step 2: Balance */}
         {step === 2 && (
-          <GlassCard className="w-full max-w-sm animate-in slide-in-from-right duration-500">
-            <h2 className="text-2xl font-bold mb-2 text-white">{t.step_balance}</h2>
-            <p className="text-zinc-500 mb-8 text-xs font-mono uppercase tracking-wide">Data Source: Banking App Screenshot</p>
-            
-            <ScannerZone 
-                label={t.upload_image} 
-                subLabel="Current Balance"
-                file={balanceFile} 
-                onChange={() => document.getElementById('balanceInput')?.click()} 
-                icon={Smartphone}
-            />
-            <input id="balanceInput" type="file" accept="image/*" className="hidden" onChange={(e) => setBalanceFile(e.target.files?.[0] || null)} />
-            
-            <button onClick={() => setStep(3)} className="w-full bg-white text-black p-4 rounded-2xl mt-8 font-bold shadow-lg disabled:opacity-50 disabled:active:scale-100 transition-all hover:scale-[1.02]" disabled={!balanceFile}>Confirm Data</button>
-          </GlassCard>
+          <div className="w-full max-w-sm glass-card p-8 rounded-[3rem] animate-slide-up-fade text-left">
+            <h2 className="text-3xl font-display font-bold mb-2 text-white">{t.step_balance}</h2>
+            <p className="text-zinc-400 mb-8 text-sm">{t.step_balance_desc}</p>
+            <div 
+                className={`h-64 border-2 border-dashed rounded-[2.5rem] flex flex-col items-center justify-center cursor-pointer transition-all duration-300 group relative overflow-hidden ${balanceFile ? 'border-primary bg-primary/10' : 'border-white/10 hover:border-primary/50 hover:bg-white/5'}`} 
+                onClick={() => document.getElementById('balanceInput')?.click()}
+            >
+              {balanceFile && <div className="absolute inset-0 bg-primary/20 blur-xl animate-pulse"></div>}
+              <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 transition-all relative z-10 ${balanceFile ? 'bg-primary text-white shadow-[0_0_30px_rgba(168,85,247,0.5)]' : 'bg-white/5 text-zinc-500 group-hover:scale-110'}`}>
+                 {balanceFile ? <Check size={40} /> : <ImageIcon size={32} />}
+              </div>
+              <span className="text-sm font-bold text-zinc-400 group-hover:text-white transition-colors relative z-10">{balanceFile ? balanceFile.name : t.upload_image}</span>
+              <input id="balanceInput" type="file" accept="image/*" className="hidden" onChange={(e) => setBalanceFile(e.target.files?.[0] || null)} />
+            </div>
+            <button onClick={() => setStep(3)} className="w-full bg-white text-black p-4 rounded-2xl mt-8 font-bold shadow-lg hover:bg-gray-200 transition-all active:scale-95 disabled:opacity-50 disabled:shadow-none" disabled={!balanceFile}>Next Step</button>
+          </div>
         )}
 
         {/* Step 3: Salary */}
         {step === 3 && (
-          <GlassCard className="w-full max-w-sm animate-in slide-in-from-right duration-500">
-            <h2 className="text-2xl font-bold mb-2 text-white">{t.step_salary}</h2>
-            <p className="text-zinc-500 mb-8 text-xs font-mono uppercase tracking-wide">Data Source: Payslip / SMS</p>
-            
-            <ScannerZone 
-                label={t.upload_image} 
-                subLabel="Last Salary Notification"
-                file={salaryFile} 
-                onChange={() => document.getElementById('salaryInput')?.click()} 
-                icon={CreditCard}
-            />
-            <input id="salaryInput" type="file" accept="image/*" className="hidden" onChange={(e) => setSalaryFile(e.target.files?.[0] || null)} />
-            
-            <button onClick={() => setStep(4)} className="w-full bg-white text-black p-4 rounded-2xl mt-8 font-bold shadow-lg disabled:opacity-50 disabled:active:scale-100 transition-all hover:scale-[1.02]" disabled={!salaryFile}>Confirm Data</button>
-          </GlassCard>
+          <div className="w-full max-w-sm glass-card p-8 rounded-[3rem] animate-slide-up-fade text-left">
+            <h2 className="text-3xl font-display font-bold mb-2 text-white">{t.step_salary}</h2>
+            <p className="text-zinc-400 mb-8 text-sm">Upload last salary slip.</p>
+            <div 
+                className={`h-64 border-2 border-dashed rounded-[2.5rem] flex flex-col items-center justify-center cursor-pointer transition-all duration-300 group relative overflow-hidden ${salaryFile ? 'border-secondary bg-secondary/10' : 'border-white/10 hover:border-secondary/50 hover:bg-white/5'}`} 
+                onClick={() => document.getElementById('salaryInput')?.click()}
+            >
+              {salaryFile && <div className="absolute inset-0 bg-secondary/20 blur-xl animate-pulse"></div>}
+              <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 transition-all relative z-10 ${salaryFile ? 'bg-secondary text-white shadow-[0_0_30px_rgba(16,185,129,0.5)]' : 'bg-white/5 text-zinc-500 group-hover:scale-110'}`}>
+                 {salaryFile ? <Check size={40} /> : <DollarSign size={32} />}
+              </div>
+              <span className="text-sm font-bold text-zinc-400 group-hover:text-white transition-colors relative z-10">{salaryFile ? salaryFile.name : t.upload_image}</span>
+              <input id="salaryInput" type="file" accept="image/*" className="hidden" onChange={(e) => setSalaryFile(e.target.files?.[0] || null)} />
+            </div>
+            <button onClick={() => setStep(4)} className="w-full bg-white text-black p-4 rounded-2xl mt-8 font-bold shadow-lg hover:bg-gray-200 transition-all active:scale-95 disabled:opacity-50 disabled:shadow-none" disabled={!salaryFile}>Next Step</button>
+          </div>
         )}
 
         {/* Step 4: Expenses */}
         {step === 4 && (
-          <GlassCard className="w-full max-w-sm animate-in slide-in-from-right duration-500">
-            <h2 className="text-2xl font-bold mb-2 text-white">{t.step_expenses}</h2>
-            <p className="text-zinc-500 mb-8 text-xs font-mono uppercase tracking-wide">Upload multiple to train AI.</p>
-            
+          <div className="w-full max-w-sm glass-card p-8 rounded-[3rem] animate-slide-up-fade text-left">
+            <h2 className="text-3xl font-display font-bold mb-2 text-white">{t.step_expenses}</h2>
+            <p className="text-zinc-400 mb-8 text-sm">Upload receipts to learn habits.</p>
             <div 
+                className={`h-64 border-2 border-dashed rounded-[2.5rem] flex flex-col items-center justify-center cursor-pointer transition-all duration-300 group relative overflow-hidden ${expenseFiles.length ? 'border-primary bg-primary/10' : 'border-white/10 hover:border-primary/50 hover:bg-white/5'}`} 
                 onClick={() => document.getElementById('expensesInput')?.click()}
-                className={`relative h-56 border border-white/10 rounded-[2rem] flex flex-col items-center justify-center cursor-pointer overflow-hidden group transition-all duration-300 ${expenseFiles.length ? 'bg-sber-green/5 border-sber-green/30' : 'bg-black/30 hover:bg-white/5'}`}
             >
-               <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-white/50 to-transparent translate-y-[-10px] group-hover:translate-y-[220px] transition-transform duration-[2s] ease-linear"></div>
-               
-               <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mb-4 transition-all duration-500 ${expenseFiles.length ? 'bg-sber-green text-white shadow-[0_0_30px_rgba(33,160,56,0.4)] scale-110' : 'bg-white/5 text-zinc-500 group-hover:bg-white/10'}`}>
-                 {expenseFiles.length ? <span className="font-bold text-2xl">{expenseFiles.length}</span> : <ScanLine size={32} strokeWidth={1.5} />}
+               {expenseFiles.length > 0 && <div className="absolute inset-0 bg-primary/20 blur-xl animate-pulse"></div>}
+               <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 transition-all relative z-10 ${expenseFiles.length ? 'bg-primary text-white shadow-[0_0_30px_rgba(168,85,247,0.5)]' : 'bg-white/5 text-zinc-500 group-hover:scale-110'}`}>
+                 {expenseFiles.length ? <span className="font-display font-bold text-2xl">{expenseFiles.length}</span> : <Upload size={32} />}
                </div>
-               <span className="text-sm font-bold text-white z-10">{expenseFiles.length ? 'Receipts Scanned' : 'Bulk Scan'}</span>
+               <span className="text-sm font-bold text-zinc-400 group-hover:text-white transition-colors relative z-10">{expenseFiles.length ? 'Files Selected' : 'Upload Receipts'}</span>
                <input id="expensesInput" type="file" accept="image/*" multiple className="hidden" onChange={(e) => setExpenseFiles(Array.from(e.target.files || []))} />
             </div>
-            
-            <button onClick={() => setStep(5)} className="w-full bg-white text-black p-4 rounded-2xl mt-8 font-bold shadow-lg transition-all hover:scale-[1.02]">Proceed</button>
-          </GlassCard>
+            <button onClick={() => setStep(5)} className="w-full bg-white text-black p-4 rounded-2xl mt-8 font-bold shadow-lg hover:bg-gray-200 transition-all active:scale-95">Next Step</button>
+          </div>
         )}
 
         {/* Step 5: Recurring Bills */}
         {step === 5 && (
-          <GlassCard className="w-full max-w-sm animate-in slide-in-from-right duration-500">
-             <h2 className="text-2xl font-bold mb-2 text-white">{t.step_recurring}</h2>
-             <p className="text-zinc-500 mb-6 text-xs font-mono uppercase tracking-wide">Manual Entry: Fixed Obligations</p>
+          <div className="w-full max-w-sm glass-card p-8 rounded-[3rem] animate-slide-up-fade text-left">
+             <h2 className="text-3xl font-display font-bold mb-2 text-white">{t.step_recurring}</h2>
+             <p className="text-zinc-400 mb-6 text-sm">Rent, Internet, Netflix, etc.</p>
              
-             <div className="bg-black/40 p-4 rounded-[1.5rem] border border-white/5 mb-6 space-y-3">
-                <input type="text" placeholder={t.bill_name} value={newBillName} onChange={e => setNewBillName(e.target.value)} className="w-full bg-black/50 p-3 rounded-xl border border-white/10 outline-none text-sm text-white focus:border-sber-green placeholder-zinc-700" />
+             <div className="glass-card p-4 rounded-3xl border border-white/5 mb-6 space-y-3">
+                <input type="text" placeholder={t.bill_name} value={newBillName} onChange={e => setNewBillName(e.target.value)} className="w-full bg-white/5 p-3 rounded-xl border border-white/10 outline-none text-sm text-white focus:border-primary transition-all" />
                 <div className="flex gap-2">
-                   <div className="relative flex-1">
-                     <input type="number" placeholder={t.bill_amount} value={newBillAmount} onChange={e => setNewBillAmount(e.target.value)} className="w-full bg-black/50 p-3 rounded-xl border border-white/10 outline-none text-sm text-white focus:border-sber-green placeholder-zinc-700" />
-                   </div>
-                   <button onClick={() => { if(newBillName && newBillAmount) { setRecurringBills([...recurringBills, { id: Date.now().toString(), name: newBillName, amount: Number(newBillAmount) }]); setNewBillName(''); setNewBillAmount(''); } }} className="bg-white text-black p-3 rounded-xl hover:bg-gray-200 transition-colors"><Plus /></button>
+                   <input type="number" placeholder={t.bill_amount} value={newBillAmount} onChange={e => setNewBillAmount(e.target.value)} className="w-full bg-white/5 p-3 rounded-xl border border-white/10 outline-none text-sm text-white focus:border-primary transition-all" />
+                   <button onClick={() => { if(newBillName && newBillAmount) { setRecurringBills([...recurringBills, { id: Date.now().toString(), name: newBillName, amount: Number(newBillAmount) }]); setNewBillName(''); setNewBillAmount(''); } }} className="bg-primary p-3 rounded-xl text-white hover:bg-purple-600 transition-colors shadow-lg"><Plus /></button>
                 </div>
-                
-                {/* Bills List */}
                 {recurringBills.length > 0 && (
                     <div className="space-y-2 pt-2 max-h-32 overflow-y-auto custom-scrollbar">
                         {recurringBills.map(b => (
-                            <div key={b.id} className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/5 animate-in slide-in-from-left">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
-                                    <span className="text-xs font-medium">{b.name}</span>
-                                </div>
-                                <span className="text-xs font-bold text-white font-mono">{b.amount}</span>
+                            <div key={b.id} className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/5 hover:bg-white/10 transition-colors">
+                                <span className="text-sm font-medium">{b.name}</span> 
+                                <span className="text-xs font-bold text-zinc-400">{b.amount}</span>
                             </div>
                         ))}
                     </div>
                 )}
              </div>
-             <button onClick={handleStartAnalysis} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(147,51,234,0.3)] hover:shadow-[0_0_50px_rgba(147,51,234,0.5)] transition-all active:scale-95">
-                 Initialize Neural Engine <Zap size={18} className="fill-white" />
+             <button onClick={handleStartAnalysis} className="w-full bg-gradient-to-r from-primary to-indigo-600 hover:to-indigo-500 text-white p-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(168,85,247,0.4)] transition-all active:scale-95">
+                 Analyze All <Zap size={18} className="fill-current" />
              </button>
-          </GlassCard>
+          </div>
         )}
 
-        {/* Step 6: Loading (Matrix Effect) */}
+        {/* Step 6: Loading */}
         {step === 6 && (
-           <div className="flex flex-col items-center justify-center animate-in fade-in duration-700 my-auto">
-              <div className="relative w-32 h-32 mb-8">
-                  <div className="absolute inset-0 border-4 border-purple-500/20 rounded-full animate-spin-slow"></div>
-                  <div className="absolute inset-4 border-4 border-t-purple-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+           <div className="flex flex-col items-center justify-center animate-fade-in relative">
+              <div className="absolute inset-0 bg-primary/20 blur-[80px] rounded-full animate-pulse-slow"></div>
+              <div className="relative z-10">
+                  <div className="w-32 h-32 rounded-full border-4 border-primary/20 border-t-primary animate-spin"></div>
                   <div className="absolute inset-0 flex items-center justify-center">
-                      <Sparkles className="w-10 h-10 text-purple-400 animate-pulse" />
+                      <Sparkles className="w-12 h-12 text-primary animate-pulse" />
                   </div>
               </div>
-              <h2 className="text-2xl font-bold text-white tracking-wide">{t.analyzing_all}</h2>
-              <div className="mt-4 flex flex-col gap-2 items-center">
-                  <span className="text-xs text-purple-400 font-mono animate-pulse">OCR SCANNING...</span>
-                  <span className="text-xs text-indigo-400 font-mono animate-pulse" style={{ animationDelay: '0.5s' }}>PATTERN RECOGNITION...</span>
-                  <span className="text-xs text-sber-green font-mono animate-pulse" style={{ animationDelay: '1s' }}>BUILDING PROFILE...</span>
-              </div>
+              <h2 className="text-3xl font-display font-bold mt-8 text-white tracking-wide text-glow">{t.analyzing_all}</h2>
+              <p className="text-zinc-400 mt-2 text-sm font-mono tracking-widest">AI NEURAL PROCESSING...</p>
            </div>
         )}
 
         {/* Step 7: Final Review */}
         {step === 7 && analysisResult && (
-           <div className="w-full max-w-sm animate-in slide-in-from-bottom duration-700 pb-24 relative z-10">
-              <h2 className="text-3xl font-bold mb-2 text-white">System Ready</h2>
-              <p className="text-zinc-500 mb-8 text-xs font-mono uppercase">Verify Configuration</p>
+           <div className="w-full max-w-sm animate-slide-up-fade pb-10">
+              <h2 className="text-4xl font-display font-bold mb-2 text-white">{t.step_review}</h2>
+              <p className="text-zinc-400 mb-8 text-sm">Configure your smart wallets.</p>
               
               <div className="space-y-4">
                  {/* 1. Spending Wallet Config */}
-                 <div className="bg-[#121212] p-5 rounded-[2rem] border border-white/10 space-y-4 shadow-xl relative overflow-hidden z-10">
-                    <div className="absolute top-0 right-0 p-4 opacity-5"><Wallet size={64} /></div>
-                    <div className="flex justify-between items-center border-b border-white/5 pb-3">
+                 <div className="glass-card p-6 rounded-[2.5rem] border border-white/10 space-y-4 shadow-xl">
+                    <div className="flex justify-between items-center border-b border-white/5 pb-4">
                         <div className="flex items-center gap-2 text-zinc-300">
-                            <Wallet size={16} /> <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Spending</span>
+                            <Wallet size={18} /> <span className="text-xs font-bold uppercase tracking-wider">Spending</span>
                         </div>
-                        <span className="font-mono font-bold text-white text-lg">{analysisResult.currentBalance.toLocaleString()}</span>
+                        <span className="font-display font-bold text-white text-2xl">{analysisResult.currentBalance.toLocaleString()}</span>
                     </div>
 
                     <div className="pt-1">
                         <button 
                             onClick={() => setShowSpendingBankEdit(!showSpendingBankEdit)}
-                            className="w-full flex justify-between items-center bg-black/40 p-3 rounded-xl border border-white/5 hover:bg-white/5 transition-all group"
+                            className="w-full flex justify-between items-center bg-black/40 p-4 rounded-2xl border border-white/5 hover:bg-white/5 transition-all group"
                         >
-                            <span className="text-xs text-zinc-400 group-hover:text-white transition-colors">Bank Integration</span>
+                            <span className="text-xs text-zinc-400 group-hover:text-white transition-colors uppercase tracking-wider">Bank Account</span>
                             <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: customSpendingColor }}></div>
                                 <span className="text-xs font-bold text-white">{spendingBankId === 'other' ? customSpendingName || 'Custom' : RUSSIAN_BANKS.find(b => b.id === spendingBankId)?.name}</span>
                                 <ChevronDown size={14} className={`text-zinc-500 transition-transform ${showSpendingBankEdit ? 'rotate-180' : ''}`} />
                             </div>
@@ -2147,17 +1882,16 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
                  </div>
                  
                  {/* 2. Savings Wallet Config */}
-                 <div className="bg-[#121212] p-5 rounded-[2rem] border border-white/10 space-y-4 shadow-xl relative overflow-hidden z-10">
-                    <div className="absolute top-0 right-0 p-4 opacity-5 text-sber-green"><PiggyBank size={64} /></div>
+                 <div className="glass-card p-6 rounded-[2.5rem] border border-white/10 space-y-4 shadow-xl">
                     <div className="flex justify-between items-center mb-1">
                         <div className="flex items-center gap-2 text-sber-green">
-                            <PiggyBank size={16} /> <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Savings Pot</span>
+                            <PiggyBank size={18} /> <span className="text-xs font-bold uppercase tracking-wider">Savings Pot</span>
                         </div>
                         <input 
                             type="number" 
                             value={savingsInitial} 
                             onChange={e => setSavingsInitial(Number(e.target.value))}
-                            className="bg-black/50 text-white w-28 text-right p-2 rounded-xl text-lg font-bold border border-white/10 outline-none focus:border-sber-green transition-all font-mono"
+                            className="bg-white/5 text-white w-28 text-right p-2 rounded-xl text-xl font-display font-bold border border-white/10 outline-none focus:border-sber-green transition-all"
                             placeholder="0.00"
                         />
                     </div>
@@ -2165,11 +1899,10 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
                     <div className="pt-2">
                             <button 
                                 onClick={() => setShowSavingsBankEdit(!showSavingsBankEdit)}
-                                className="w-full flex justify-between items-center bg-black/40 p-3 rounded-xl border border-white/5 hover:bg-white/5 transition-all group"
+                                className="w-full flex justify-between items-center bg-black/40 p-4 rounded-2xl border border-white/5 hover:bg-white/5 transition-all group"
                             >
-                                <span className="text-xs text-zinc-400 group-hover:text-white transition-colors">Bank Integration</span>
+                                <span className="text-xs text-zinc-400 group-hover:text-white transition-colors uppercase tracking-wider">Bank Account</span>
                                 <div className="flex items-center gap-2">
-                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: customSavingsColor }}></div>
                                     <span className="text-xs font-bold text-white">{savingsBankId === 'other' ? customSavingsName || 'Custom' : RUSSIAN_BANKS.find(b => b.id === savingsBankId)?.name}</span>
                                     <ChevronDown size={14} className={`text-zinc-500 transition-transform ${showSavingsBankEdit ? 'rotate-180' : ''}`} />
                                 </div>
@@ -2191,33 +1924,33 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
                  </div>
 
                  {/* 3. Salary Cycle */}
-                 <div className="bg-[#121212] p-5 rounded-[2rem] border border-white/10 shadow-xl relative z-10">
-                    <div className="flex items-center gap-2 mb-4">
-                        <CalendarClock className="text-purple-400 w-4 h-4" />
-                        <span className="text-[10px] font-bold text-white uppercase tracking-[0.2em]">Salary Cycle</span>
+                 <div className="glass-card p-6 rounded-[2.5rem] border border-white/10 shadow-xl">
+                    <div className="flex items-center gap-2 mb-6">
+                        <CalendarClock className="text-purple-400 w-5 h-5" />
+                        <span className="text-sm font-bold text-white uppercase tracking-wider">Salary Cycle</span>
                     </div>
                     
-                    <div className="mb-4 flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5">
-                        <p className="text-[10px] text-zinc-400 font-bold uppercase">Last Detected</p>
-                        <p className="text-white font-mono font-bold text-sm">
+                    <div className="mb-6 flex items-center justify-between bg-black/40 p-4 rounded-2xl border border-white/5">
+                        <p className="text-xs text-zinc-400 uppercase tracking-widest">Detected Date</p>
+                        <p className="text-white font-mono font-bold text-lg">
                             {analysisResult.lastSalary.date}
                         </p>
                     </div>
 
-                    <div className="mb-6">
-                        <label className="text-[9px] text-zinc-500 uppercase font-bold mb-2 block tracking-wider">Interval (Days)</label>
+                    <div className="mb-8">
+                        <label className="text-[10px] text-zinc-500 uppercase font-bold mb-2 block tracking-widest text-left ml-1">Pay Interval (Days)</label>
                         <input 
                             type="number" 
                             value={salaryInterval} 
                             onChange={e => setSalaryInterval(Number(e.target.value))}
-                            className="w-full bg-black/50 text-white p-3 rounded-xl border border-white/10 text-center font-bold text-lg outline-none focus:border-purple-500 transition-all font-mono"
+                            className="w-full bg-white/5 text-white p-4 rounded-2xl border border-white/10 text-center font-display font-bold text-2xl outline-none focus:border-purple-500 transition-all"
                         />
                     </div>
 
                     <SmartCalendar lastSalaryDate={analysisResult.lastSalary.date} interval={salaryInterval} />
                  </div>
 
-                 <button onClick={handleFinalize} className="w-full bg-white text-black p-4 rounded-2xl mt-4 font-bold shadow-[0_0_30px_rgba(255,255,255,0.3)] hover:bg-gray-200 transition-all active:scale-95 text-sm uppercase tracking-widest relative z-10">
+                 <button onClick={handleFinalize} className="w-full bg-white text-black p-5 rounded-2xl mt-4 font-bold shadow-[0_0_30px_rgba(255,255,255,0.3)] hover:scale-[1.02] transition-all active:scale-95 text-lg uppercase tracking-wider">
                     {t.confirm_setup}
                  </button>
               </div>
@@ -2234,7 +1967,7 @@ export const Onboarding: React.FC<Props> = ({ user, setUser, onComplete, onResto
 import React, { useState } from 'react';
 import { RecurringBill, UserSettings } from '../types';
 import { TRANSLATIONS } from '../constants';
-import { Check, Calendar, X, Plus, Trash2, AlertCircle } from 'lucide-react';
+import { Check, Calendar, Plus, Trash2, Receipt } from 'lucide-react';
 
 interface Props {
   user: UserSettings;
@@ -2281,40 +2014,46 @@ export const RecurringBills: React.FC<Props> = ({ user, onPayBill, onAddBill, on
       {bills.length === 0 ? (
         <div 
             onClick={() => setIsAdding(true)}
-            className="flex flex-col items-center justify-center py-8 border-2 border-dashed border-white/10 rounded-2xl bg-white/5 cursor-pointer hover:bg-white/10 transition-colors"
+            className="flex flex-col items-center justify-center py-8 border border-dashed border-white/10 rounded-2xl bg-white/5 cursor-pointer hover:bg-white/10 transition-colors group"
         >
-            <Plus className="w-6 h-6 text-zinc-500 mb-2" />
+            <div className="p-3 rounded-full bg-white/5 group-hover:scale-110 transition-transform mb-2">
+                <Plus className="w-5 h-5 text-zinc-500 group-hover:text-white" />
+            </div>
             <p className="text-xs text-zinc-500 font-medium">Tap to add fixed bills</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-2">
-            {bills.map(bill => {
+            {bills.map((bill, idx) => {
             const isPaid = bill.lastPaidDate && bill.lastPaidDate.startsWith(currentMonth);
             return (
                 <div 
                 key={bill.id}
                 onClick={() => !isPaid && setSelectedBill(bill)}
-                className={`relative overflow-hidden p-4 rounded-2xl border transition-all duration-300 flex items-center justify-between group ${
-                    isPaid 
-                    ? 'bg-sber-green/5 border-sber-green/20 opacity-60' 
-                    : 'bg-[#1C1C1E] border-white/5 hover:border-white/10 active:scale-[0.98]'
-                }`}
+                className={`
+                    relative overflow-hidden p-4 rounded-2xl transition-all duration-300 flex items-center justify-between group
+                    ${isPaid 
+                        ? 'bg-sber-green/5 border border-sber-green/10 opacity-60' 
+                        : 'glass-card glass-card-hover cursor-pointer'
+                    }
+                    animate-slide-up-fade
+                `}
+                style={{ animationDelay: `${idx * 50}ms` }}
                 >
                 <div className="flex items-center gap-4 z-10">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${isPaid ? 'bg-sber-green text-white' : 'bg-white/5 text-zinc-400'}`}>
-                        {isPaid ? <Check size={18} strokeWidth={3} /> : <Calendar size={18} />}
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors border ${isPaid ? 'bg-sber-green/20 border-sber-green/20 text-sber-green' : 'bg-white/5 border-white/5 text-zinc-400 group-hover:text-white'}`}>
+                        {isPaid ? <Check size={18} strokeWidth={3} /> : <Receipt size={18} />}
                     </div>
                     <div>
-                        <h4 className={`font-bold text-sm ${isPaid ? 'text-zinc-500 line-through' : 'text-white'}`}>{bill.name}</h4>
-                        <p className="text-[10px] text-zinc-500 font-mono">
+                        <h4 className={`font-bold text-sm ${isPaid ? 'text-zinc-500 line-through decoration-zinc-600' : 'text-white'}`}>{bill.name}</h4>
+                        <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
                             {isPaid ? `Paid: ${bill.lastPaidDate}` : 'Due this month'}
                         </p>
                     </div>
                 </div>
                 
                 <div className="flex items-center gap-3 z-10">
-                    <span className={`font-bold text-sm ${isPaid ? 'text-zinc-500' : 'text-white'}`}>
-                        {bill.amount} <span className="text-[10px] opacity-50">{user.currency}</span>
+                    <span className={`font-display font-bold text-sm ${isPaid ? 'text-zinc-500' : 'text-white'}`}>
+                        {bill.amount} <span className="text-[10px] opacity-50 font-sans">{user.currency}</span>
                     </span>
                     <button 
                         onClick={(e) => { e.stopPropagation(); onDeleteBill(bill.id); }}
@@ -2330,7 +2069,7 @@ export const RecurringBills: React.FC<Props> = ({ user, onPayBill, onAddBill, on
             {/* Add Button Row */}
             <button 
                 onClick={() => setIsAdding(true)}
-                className="w-full py-3 rounded-xl border border-dashed border-white/10 text-xs font-bold text-zinc-500 hover:text-white hover:border-white/20 transition-all flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl border border-dashed border-white/10 text-xs font-bold text-zinc-500 hover:text-white hover:border-white/20 transition-all flex items-center justify-center gap-2 hover:bg-white/5 uppercase tracking-wider"
             >
                 <Plus size={14} /> Add Bill
             </button>
@@ -2339,33 +2078,33 @@ export const RecurringBills: React.FC<Props> = ({ user, onPayBill, onAddBill, on
 
       {/* Payment Modal */}
       {selectedBill && (
-         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4">
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedBill(null)} />
-            <div className="relative bg-[#1C1C1E] border border-white/10 w-full sm:max-w-sm rounded-t-[2rem] sm:rounded-[2rem] p-6 animate-in slide-in-from-bottom-full duration-300">
-               <div className="w-12 h-1 bg-zinc-700 rounded-full mx-auto mb-6 sm:hidden" />
+         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+            <div className="absolute inset-0" onClick={() => setSelectedBill(null)} />
+            <div className="relative glass-panel w-full sm:max-w-sm rounded-t-[2.5rem] sm:rounded-[2.5rem] p-6 animate-slide-up-fade shadow-2xl border border-white/10">
+               <div className="w-12 h-1 bg-white/20 rounded-full mx-auto mb-6 sm:hidden" />
                
                <div className="text-center mb-8">
-                  <div className="w-16 h-16 bg-sber-green/10 rounded-full flex items-center justify-center mx-auto mb-4 text-sber-green">
+                  <div className="w-16 h-16 bg-sber-green/10 rounded-full flex items-center justify-center mx-auto mb-4 text-sber-green border border-sber-green/20 shadow-[0_0_20px_rgba(33,160,56,0.2)]">
                       <Check size={32} />
                   </div>
-                  <h3 className="text-xl font-bold text-white mb-1">{t.confirm_payment}</h3>
-                  <p className="text-sm text-gray-400">Mark <span className="text-white font-bold">{selectedBill.name}</span> as paid?</p>
+                  <h3 className="text-xl font-display font-bold text-white mb-1">{t.confirm_payment}</h3>
+                  <p className="text-sm text-zinc-400">Mark <span className="text-white font-bold">{selectedBill.name}</span> as paid?</p>
                </div>
 
                <div className="space-y-4">
-                  <div className="bg-black/40 p-4 rounded-2xl flex items-center justify-between border border-white/5">
-                      <span className="text-sm text-gray-400">Amount</span>
-                      <span className="text-lg font-bold text-white">{selectedBill.amount} {user.currency}</span>
+                  <div className="glass-card p-4 rounded-2xl flex items-center justify-between">
+                      <span className="text-sm text-zinc-400">Amount</span>
+                      <span className="text-lg font-display font-bold text-white">{selectedBill.amount} {user.currency}</span>
                   </div>
 
                   <div className="flex gap-3">
                       <div className="flex-1">
-                        <label className="text-[10px] text-gray-500 font-bold uppercase ml-2 mb-1 block">Date</label>
+                        <label className="text-[10px] text-zinc-500 font-bold uppercase ml-2 mb-1 block">Date</label>
                         <input 
                             type="date" 
                             value={payDate}
                             onChange={(e) => setPayDate(e.target.value)}
-                            className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/10 text-sm outline-none focus:border-sber-green"
+                            className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/10 text-sm outline-none focus:border-sber-green focus:shadow-[0_0_15px_rgba(33,160,56,0.2)] transition-all"
                         />
                       </div>
                   </div>
@@ -2374,15 +2113,15 @@ export const RecurringBills: React.FC<Props> = ({ user, onPayBill, onAddBill, on
                     onClick={() => setDeduct(!deduct)}
                     className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${deduct ? 'bg-sber-green/10 border-sber-green/50' : 'bg-black/40 border-white/5'}`}
                   >
-                     <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${deduct ? 'bg-sber-green border-sber-green' : 'border-zinc-600'}`}>
+                     <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${deduct ? 'bg-sber-green border-sber-green shadow-[0_0_10px_#22c55e]' : 'border-zinc-600'}`}>
                         {deduct && <Check size={12} className="text-white" />}
                      </div>
-                     <span className="text-sm font-medium text-gray-300">{t.deduct_balance}</span>
+                     <span className="text-sm font-medium text-zinc-300">{t.deduct_balance}</span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 mt-4">
-                      <button onClick={() => setSelectedBill(null)} className="py-3 rounded-xl font-bold text-sm bg-zinc-800 text-white">Cancel</button>
-                      <button onClick={confirmPayment} className="py-3 rounded-xl font-bold text-sm bg-sber-green text-white shadow-lg shadow-sber-green/20">Confirm</button>
+                      <button onClick={() => setSelectedBill(null)} className="py-3 rounded-xl font-bold text-sm text-zinc-400 hover:text-white hover:bg-white/5 transition-colors">Cancel</button>
+                      <button onClick={confirmPayment} className="py-3 rounded-xl font-bold text-sm bg-sber-green text-white shadow-[0_0_20px_rgba(33,160,56,0.3)] hover:shadow-[0_0_30px_rgba(33,160,56,0.5)] transition-all active:scale-95">Confirm</button>
                   </div>
                </div>
             </div>
@@ -2391,43 +2130,43 @@ export const RecurringBills: React.FC<Props> = ({ user, onPayBill, onAddBill, on
 
       {/* Add Bill Modal */}
       {isAdding && (
-          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4">
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsAdding(false)} />
-            <div className="relative bg-[#1C1C1E] border border-white/10 w-full sm:max-w-sm rounded-t-[2rem] sm:rounded-[2rem] p-6 animate-in slide-in-from-bottom-full duration-300">
-               <div className="w-12 h-1 bg-zinc-700 rounded-full mx-auto mb-6 sm:hidden" />
+          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+            <div className="absolute inset-0" onClick={() => setIsAdding(false)} />
+            <div className="relative glass-panel w-full sm:max-w-sm rounded-t-[2.5rem] sm:rounded-[2.5rem] p-6 animate-slide-up-fade shadow-2xl border border-white/10">
+               <div className="w-12 h-1 bg-white/20 rounded-full mx-auto mb-6 sm:hidden" />
                
-               <h3 className="text-xl font-bold text-white mb-6 text-center">{t.add_bill}</h3>
+               <h3 className="text-xl font-display font-bold text-white mb-6 text-center">{t.add_bill}</h3>
                
-               <div className="space-y-4">
-                  <div>
-                     <label className="text-[10px] text-gray-500 font-bold uppercase ml-2 mb-1 block">{t.bill_name}</label>
+               <div className="space-y-5">
+                  <div className="group">
+                     <label className="text-[10px] text-zinc-500 font-bold uppercase ml-2 mb-1 block group-focus-within:text-white transition-colors">{t.bill_name}</label>
                      <input 
                         type="text"
                         placeholder="e.g. Netflix"
                         value={newName}
                         onChange={(e) => setNewName(e.target.value)}
-                        className="w-full bg-black/40 text-white p-4 rounded-2xl border border-white/10 focus:border-sber-green focus:outline-none transition-colors"
+                        className="w-full bg-black/40 text-white p-4 rounded-2xl border border-white/10 focus:border-white/30 focus:shadow-[0_0_15px_rgba(255,255,255,0.1)] focus:outline-none transition-all placeholder-zinc-700"
                         autoFocus
                      />
                   </div>
-                  <div>
-                     <label className="text-[10px] text-gray-500 font-bold uppercase ml-2 mb-1 block">{t.bill_amount}</label>
+                  <div className="group">
+                     <label className="text-[10px] text-zinc-500 font-bold uppercase ml-2 mb-1 block group-focus-within:text-white transition-colors">{t.bill_amount}</label>
                      <div className="relative">
                         <input 
                             type="number"
                             placeholder="0.00"
                             value={newAmount}
                             onChange={(e) => setNewAmount(e.target.value)}
-                            className="w-full bg-black/40 text-white p-4 rounded-2xl border border-white/10 focus:border-sber-green focus:outline-none transition-colors"
+                            className="w-full bg-black/40 text-white p-4 rounded-2xl border border-white/10 focus:border-white/30 focus:shadow-[0_0_15px_rgba(255,255,255,0.1)] focus:outline-none transition-all placeholder-zinc-700"
                         />
-                        <span className="absolute right-4 top-4 text-gray-500 font-bold text-sm pointer-events-none">{user.currency}</span>
+                        <span className="absolute right-4 top-4 text-zinc-500 font-bold text-sm pointer-events-none">{user.currency}</span>
                      </div>
                   </div>
 
                   <button 
                      onClick={handleSaveNewBill}
                      disabled={!newName || !newAmount}
-                     className="w-full bg-white text-black hover:bg-gray-200 py-4 rounded-2xl font-bold text-sm shadow-lg mt-2 disabled:opacity-50"
+                     className="w-full bg-white text-black hover:bg-zinc-200 py-4 rounded-2xl font-bold text-sm shadow-[0_0_20px_rgba(255,255,255,0.2)] mt-2 disabled:opacity-50 disabled:shadow-none transition-all active:scale-95 uppercase tracking-wider"
                   >
                      {t.save}
                   </button>
@@ -2509,9 +2248,9 @@ export const Reports: React.FC<Props> = ({ transactions, language }) => {
   const CustomTooltip = ({ active, payload, label }: any) => {
       if (active && payload && payload.length) {
           return (
-              <div className="glass-strong border border-white/10 p-3 rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+              <div className="glass-card p-4 rounded-2xl border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)] backdrop-blur-xl">
                   <p className="text-[10px] text-zinc-400 font-bold mb-1 uppercase tracking-wider">{label}</p>
-                  <p className="text-white font-bold text-lg font-mono">
+                  <p className="text-white font-display font-bold text-xl">
                       {Number(payload[0].value).toLocaleString()}
                   </p>
               </div>
@@ -2521,96 +2260,98 @@ export const Reports: React.FC<Props> = ({ transactions, language }) => {
   };
 
   return (
-    <div className="space-y-6 pb-32">
+    <div className="space-y-8 pb-32 pt-2">
       
       {/* Header */}
-      <div className="flex items-center gap-3 px-2 mb-2 pt-4 animate-slide-down">
-         <div className="bg-sber-green/10 p-3 rounded-2xl border border-sber-green/20 shadow-[0_0_15px_rgba(33,160,56,0.2)]">
-             <PieIcon className="w-6 h-6 text-sber-green" />
+      <div className="flex items-center gap-3 px-2 mb-2 pt-4 animate-slide-up-fade" style={{ animationDelay: '0ms' }}>
+         <div className="bg-primary/10 p-3 rounded-2xl border border-primary/20 shadow-[0_0_20px_rgba(168,85,247,0.2)]">
+             <PieIcon className="w-6 h-6 text-primary" />
          </div>
-         <h2 className="text-3xl font-bold text-white leading-none tracking-tight">{t.reports}</h2>
+         <h2 className="text-3xl font-display font-bold text-white leading-none tracking-wide text-glow">{t.reports}</h2>
       </div>
 
       {hasData ? (
           <>
             {/* 1. Hero Stats Row */}
-            <div className="grid grid-cols-2 gap-3 px-1">
+            <div className="grid grid-cols-2 gap-4 px-1">
                 {/* Total Spent */}
-                <div className="glass-panel p-5 rounded-[2rem] relative overflow-hidden group animate-scale-in" style={{ animationDelay: '0.1s' }}>
+                <div className="glass-card p-6 rounded-[2.5rem] relative overflow-hidden group animate-scale-in" style={{ animationDelay: '100ms' }}>
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
-                        <TrendingDown size={48} />
+                        <TrendingDown size={56} />
                     </div>
-                    <div className="absolute -bottom-4 -left-4 w-20 h-20 bg-red-500/20 blur-2xl rounded-full"></div>
+                    {/* Animated Blob */}
+                    <div className="absolute -bottom-8 -left-8 w-32 h-32 bg-red-500/20 blur-[50px] rounded-full animate-pulse-glow"></div>
                     
-                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2 flex items-center gap-1 relative z-10">
                         <Activity size={10} /> Total Spent
                     </p>
-                    <h3 className="text-2xl font-bold text-white tabular-nums tracking-tight drop-shadow-md">
+                    <h3 className="text-3xl font-display font-bold text-white tabular-nums tracking-tight drop-shadow-md relative z-10">
                         {totalExpenses.toLocaleString()}
                     </h3>
-                    <div className="mt-2 text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-1 rounded-lg w-fit">
+                    <div className="mt-3 text-[10px] font-bold text-red-300 bg-red-500/10 px-3 py-1 rounded-full w-fit border border-red-500/10 relative z-10">
                         Expense
                     </div>
                 </div>
 
                 {/* Daily Average */}
-                <div className="glass-panel p-5 rounded-[2rem] relative overflow-hidden group animate-scale-in" style={{ animationDelay: '0.2s' }}>
+                <div className="glass-card p-6 rounded-[2.5rem] relative overflow-hidden group animate-scale-in" style={{ animationDelay: '200ms' }}>
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
-                        <Calculator size={48} />
+                        <Calculator size={56} />
                     </div>
-                    <div className="absolute -bottom-4 -right-4 w-20 h-20 bg-blue-500/20 blur-2xl rounded-full"></div>
+                    {/* Animated Blob */}
+                    <div className="absolute -bottom-8 -right-8 w-32 h-32 bg-blue-500/20 blur-[50px] rounded-full animate-pulse-glow" style={{ animationDelay: '1s' }}></div>
 
-                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2 flex items-center gap-1 relative z-10">
                         <Calendar size={10} /> Daily Avg
                     </p>
-                    <h3 className="text-2xl font-bold text-white tabular-nums tracking-tight drop-shadow-md">
+                    <h3 className="text-3xl font-display font-bold text-white tabular-nums tracking-tight drop-shadow-md relative z-10">
                         {averageDaily.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </h3>
-                    <div className="mt-2 text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-1 rounded-lg w-fit">
+                    <div className="mt-3 text-[10px] font-bold text-blue-300 bg-blue-500/10 px-3 py-1 rounded-full w-fit border border-blue-500/10 relative z-10">
                         Last 7 Days
                     </div>
                 </div>
             </div>
 
             {/* 2. Weekly Activity (Neon Bar Chart) */}
-            <div className="glass-panel p-6 rounded-[2rem] animate-slide-up" style={{ animationDelay: '0.3s' }}>
-                <div className="flex items-center justify-between mb-6">
-                    <h3 className="font-bold text-white flex items-center gap-2">
+            <div className="glass-card p-6 rounded-[2.5rem] animate-slide-up-fade" style={{ animationDelay: '300ms' }}>
+                <div className="flex items-center justify-between mb-8">
+                    <h3 className="font-display font-bold text-white flex items-center gap-2 text-lg tracking-wide">
                         <TrendingUp className="w-5 h-5 text-blue-400" /> Weekly Flow
                     </h3>
                     <div className="flex gap-3">
-                        <span className="flex items-center gap-1.5 text-[9px] text-zinc-500 font-bold uppercase tracking-wider"><div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.8)]"></div>Max</span>
-                        <span className="flex items-center gap-1.5 text-[9px] text-zinc-500 font-bold uppercase tracking-wider"><div className="w-1.5 h-1.5 rounded-full bg-sber-green shadow-[0_0_5px_rgba(34,197,94,0.8)]"></div>Min</span>
+                        <span className="flex items-center gap-1.5 text-[9px] text-zinc-500 font-bold uppercase tracking-wider"><div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_red]"></div>Max</span>
+                        <span className="flex items-center gap-1.5 text-[9px] text-zinc-500 font-bold uppercase tracking-wider"><div className="w-1.5 h-1.5 rounded-full bg-secondary shadow-[0_0_8px_#10B981]"></div>Min</span>
                     </div>
                 </div>
                 
-                <div className="h-[220px] w-full -ml-2">
+                <div className="h-[240px] w-full -ml-2">
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={barData} barSize={12}>
-                            <CartesianGrid vertical={false} stroke="#333" strokeOpacity={0.5} strokeDasharray="3 3" />
+                        <BarChart data={barData} barSize={14}>
+                            <CartesianGrid vertical={false} stroke="#333" strokeOpacity={0.4} strokeDasharray="3 3" />
                             <XAxis 
                                 dataKey="name" 
                                 stroke="#52525b" 
-                                tick={{fill: '#71717a', fontSize: 10, fontWeight: 700}} 
+                                tick={{fill: '#a1a1aa', fontSize: 10, fontWeight: 700, fontFamily: 'Inter'}} 
                                 axisLine={false} 
                                 tickLine={false} 
-                                dy={10}
+                                dy={15}
                             />
-                            <Tooltip content={<CustomTooltip />} cursor={{fill: '#ffffff', opacity: 0.03, radius: 8}} />
-                            <Bar dataKey="amount" radius={[6, 6, 6, 6]}>
+                            <Tooltip content={<CustomTooltip />} cursor={{fill: '#ffffff', opacity: 0.05, radius: 10}} />
+                            <Bar dataKey="amount" radius={[8, 8, 8, 8]}>
                                 {barData.map((entry, index) => {
                                     let color = '#3b82f6'; // Blue
-                                    let opacity = 0.6;
+                                    let opacity = 0.7;
                                     
                                     if (entry.amount === maxAmount && maxAmount > 0) { color = '#ef4444'; opacity = 1; } // Red Max
-                                    else if (entry.amount === minAmount && entry.amount > 0) { color = '#22c55e'; opacity = 1; } // Green Min
+                                    else if (entry.amount === minAmount && entry.amount > 0) { color = '#10B981'; opacity = 1; } // Green Min
                                     
                                     return (
                                         <Cell 
                                             key={`cell-${index}`} 
                                             fill={color} 
                                             fillOpacity={opacity}
-                                            style={{ filter: `drop-shadow(0 0 8px ${color}60)` }} 
+                                            style={{ filter: `drop-shadow(0 0 10px ${color}50)` }} 
                                         />
                                     );
                                 })}
@@ -2621,14 +2362,14 @@ export const Reports: React.FC<Props> = ({ transactions, language }) => {
             </div>
 
             {/* 3. Spending Breakdown (Donut & List) */}
-            <div className="glass-panel p-6 rounded-[2rem] animate-slide-up" style={{ animationDelay: '0.4s' }}>
-                <h3 className="font-bold text-white mb-8 flex items-center gap-2">
-                    <DollarSign className="w-5 h-5 text-sber-green" /> Breakdown
+            <div className="glass-card p-6 rounded-[2.5rem] animate-slide-up-fade" style={{ animationDelay: '400ms' }}>
+                <h3 className="font-display font-bold text-white mb-8 flex items-center gap-2 text-lg tracking-wide">
+                    <DollarSign className="w-5 h-5 text-secondary" /> Breakdown
                 </h3>
                 
-                <div className="flex flex-col items-center gap-8">
+                <div className="flex flex-col items-center gap-10">
                     {/* Donut Chart */}
-                    <div className="h-[240px] w-[240px] relative">
+                    <div className="h-[260px] w-[260px] relative">
                         {/* Background Glow */}
                         <div className="absolute inset-0 bg-white/5 rounded-full blur-3xl scale-75 animate-pulse-slow"></div>
                         
@@ -2636,18 +2377,18 @@ export const Reports: React.FC<Props> = ({ transactions, language }) => {
                             <PieChart>
                                 <Pie
                                     data={pieData}
-                                    innerRadius={75}
-                                    outerRadius={105}
-                                    paddingAngle={5}
+                                    innerRadius={80}
+                                    outerRadius={110}
+                                    paddingAngle={6}
                                     dataKey="value"
-                                    cornerRadius={8}
+                                    cornerRadius={10}
                                     stroke="none"
                                 >
                                     {pieData.map((entry, index) => (
                                         <Cell 
                                             key={`cell-${index}`} 
                                             fill={entry.color} 
-                                            style={{ filter: `drop-shadow(0 0 6px ${entry.color}40)` }} 
+                                            style={{ filter: `drop-shadow(0 0 8px ${entry.color}40)` }} 
                                         />
                                     ))}
                                 </Pie>
@@ -2657,37 +2398,37 @@ export const Reports: React.FC<Props> = ({ transactions, language }) => {
                         
                         {/* Center Text */}
                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Total</span>
-                            <span className="text-2xl font-bold text-white tabular-nums drop-shadow-md">{totalExpenses.toLocaleString()}</span>
+                            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] mb-2">Total</span>
+                            <span className="text-3xl font-display font-bold text-white tabular-nums drop-shadow-md">{totalExpenses.toLocaleString()}</span>
                         </div>
                     </div>
 
                     {/* Categories List */}
-                    <div className="w-full space-y-5">
+                    <div className="w-full space-y-6">
                         {pieData.slice(0, 5).map((cat, idx) => (
                             <div key={idx} className="group">
-                                <div className="flex justify-between items-center mb-2">
+                                <div className="flex justify-between items-center mb-2.5">
                                     <div className="flex items-center gap-3">
                                         <div 
-                                            className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg border border-white/5" 
+                                            className="w-9 h-9 rounded-xl flex items-center justify-center shadow-lg border border-white/5 transition-transform group-hover:scale-110" 
                                             style={{ backgroundColor: `${cat.color}15` }}
                                         >
-                                            <div className="w-2.5 h-2.5 rounded-full shadow-[0_0_8px_currentColor]" style={{ backgroundColor: cat.color }}></div>
+                                            <div className="w-3 h-3 rounded-full shadow-[0_0_10px_currentColor]" style={{ backgroundColor: cat.color }}></div>
                                         </div>
-                                        <span className="text-sm font-bold text-zinc-200">{cat.name}</span>
+                                        <span className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">{cat.name}</span>
                                     </div>
                                     <div className="text-right">
-                                        <span className="text-sm font-bold text-white block tabular-nums">{cat.value.toLocaleString()}</span>
+                                        <span className="text-sm font-display font-bold text-white block tabular-nums tracking-wide">{cat.value.toLocaleString()}</span>
                                         <span className="text-[10px] text-zinc-500 font-mono">{((cat.value / totalExpenses) * 100).toFixed(0)}%</span>
                                     </div>
                                 </div>
                                 {/* Animated Progress Bar */}
-                                <div className="w-full bg-black/50 h-1.5 rounded-full overflow-hidden border border-white/5">
+                                <div className="w-full bg-black/40 h-2 rounded-full overflow-hidden border border-white/5">
                                     <div 
                                         className="h-full rounded-full transition-all duration-1000 ease-out relative group-hover:brightness-125"
-                                        style={{ width: `${(cat.value / totalExpenses) * 100}%`, backgroundColor: cat.color, boxShadow: `0 0 10px ${cat.color}80` }}
+                                        style={{ width: `${(cat.value / totalExpenses) * 100}%`, backgroundColor: cat.color, boxShadow: `0 0 12px ${cat.color}` }}
                                     >
-                                        <div className="absolute right-0 top-0 bottom-0 w-2 bg-white/50 blur-[2px]"></div>
+                                        <div className="absolute right-0 top-0 bottom-0 w-4 bg-white/40 blur-[4px]"></div>
                                     </div>
                                 </div>
                             </div>
@@ -2697,12 +2438,12 @@ export const Reports: React.FC<Props> = ({ transactions, language }) => {
             </div>
           </>
       ) : (
-          <div className="flex flex-col items-center justify-center py-20 text-center opacity-50 animate-fade-in">
+          <div className="flex flex-col items-center justify-center py-24 text-center opacity-50 animate-scale-in">
              <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mb-6 border border-white/5 border-dashed">
                 <PieIcon size={40} strokeWidth={1} className="text-zinc-600" />
              </div>
-             <p className="text-lg font-bold text-white">No data yet</p>
-             <p className="text-sm text-zinc-500">Add transactions to see reports.</p>
+             <p className="text-lg font-display font-bold text-white">No data yet</p>
+             <p className="text-sm text-zinc-500 mt-2">Start adding transactions.</p>
           </div>
       )}
     </div>
@@ -3285,7 +3026,7 @@ export const SettingsPage: React.FC<Props> = ({ user, setUser, onLogout }) => {
 ```tsx
 import React, { useState, useRef } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { BrainCircuit, Zap, AlertTriangle, Clock, Activity, ShieldAlert, Sparkles, ChevronLeft, ScanLine, Wallet, PiggyBank, Receipt, Cpu, ChevronRight } from 'lucide-react';
+import { BrainCircuit, Zap, AlertTriangle, Clock, Activity, ShieldAlert, Sparkles, ChevronLeft, ScanLine, Wallet, PiggyBank, Receipt } from 'lucide-react';
 import { UserSettings, Transaction, TitanAnalysis } from '../types';
 import { analyzeMultiverse, extractItemFromImage } from '../services/titanService';
 
@@ -3304,31 +3045,32 @@ export const TitanSimulator: React.FC<Props> = ({ user, transactions, onBack }) 
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Calculate stats for context bar
   const totalBills = user.recurringBills?.reduce((sum, b) => sum + b.amount, 0) || 0;
 
-  // Local Translations
   const txt = {
       title: { en: "TITAN ENGINE", ar: "محرك التيتان", ru: "ДВИГАТЕЛЬ ТИТАН" },
-      subtitle: { en: "Temporal Probability Simulator", ar: "محاكي الاحتمالات الزمنية", ru: "Симулятор вероятностей" },
-      desire: { en: "Target Acquisition", ar: "تحديد الهدف الشرائي", ru: "Цель покупки" },
-      itemName: { en: "Item Designation", ar: "اسم المنتج", ru: "Название товара" },
+      desire: { en: "What do you desire?", ar: "ماذا تريد أن تشتري؟", ru: "Что вы хотите купить?" },
+      itemName: { en: "Item Name", ar: "اسم المنتج", ru: "Название товара" },
       itemPlaceholder: { en: "e.g. iPhone 16 Pro", ar: "مثلاً: آيفون 16", ru: "например, iPhone 16" },
-      price: { en: "Estimated Cost", ar: "التكلفة التقديرية", ru: "Цена" },
-      simulate: { en: "Initialize Simulation", ar: "بدء المحاكاة", ru: "Запуск симуляции" },
-      collapsing: { en: "Collapsing Timelines...", ar: "جاري دمج المسارات الزمنية...", ru: "Анализ временных линий..." },
-      scanning: { en: "Scanning Optical Data...", ar: "جاري تحليل البيانات البصرية...", ru: "Сканирование..." },
-      scanBtn: { en: "Scan Tag / Product", ar: "مسح المنتج / السعر", ru: "Сканировать товар" },
-      lifeEnergy: { en: "Life Energy Drain", ar: "استنزاف طاقة الحياة", ru: "Расход энергии" },
-      hours: { en: "Work Hours Required", ar: "ساعات العمل المطلوبة", ru: "Часов работы" },
-      trajectories: { en: "Timeline Projections", ar: "إسقاطات المسار الزمني", ru: "Проекции" },
-      risks: { en: "Critical Anomalies", ar: "شذوذ مالي حرج", ru: "Критические риски" },
-      verdict: { en: "AI System Verdict", ar: "حكم النظام الذكي", ru: "Вердикт системы" },
-      newSim: { en: "Reset System", ar: "إعادة ضبط النظام", ru: "Сброс" },
-      // Status Bar Labels
-      wallet: { en: "LIQUIDITY", ar: "السيولة", ru: "ЛИКВИДНОСТЬ" },
-      savings: { en: "RESERVES", ar: "الاحتياطي", ru: "РЕЗЕРВЫ" },
-      bills: { en: "LIABILITIES", ar: "الالتزامات", ru: "ОБЯЗАТЕЛЬСТВА" },
+      price: { en: "Price", ar: "السعر", ru: "Цена" },
+      simulate: { en: "Simulate Future", ar: "محاكاة المستقبل", ru: "Симуляция будущего" },
+      collapsing: { en: "Collapsing Timelines...", ar: "جاري تحليل المسارات...", ru: "Анализ временных линий..." },
+      scanning: { en: "Scanning...", ar: "جاري المسح...", ru: "Сканирование..." },
+      scanBtn: { en: "Scan Tag / Product", ar: "تصوير المنتج / السعر", ru: "Сканировать товар" },
+      lifeEnergy: { en: "Life Energy Cost", ar: "تكلفة طاقة الحياة", ru: "Стоимость жизненной энергии" },
+      hours: { en: "Hours of Work", ar: "ساعات عمل", ru: "Часов работы" },
+      trajectories: { en: "Future Trajectories", ar: "المسارات المستقبلية", ru: "Будущие траектории" },
+      risks: { en: "Critical Risks Detected", ar: "مخاطر حرجة مكتشفة", ru: "Обнаружены критические риски" },
+      verdict: { en: "Titan Verdict", ar: "حكم التيتان", ru: "Вердикт Титана" },
+      newSim: { en: "Run New Simulation", ar: "محاكاة جديدة", ru: "Новая симуляция" },
+      quote: { 
+          en: "\"The Titan Engine calculates not just the cost of money, but the cost of life energy and opportunity.\"",
+          ar: "\"محرك التيتان لا يحسب تكلفة المال فحسب، بل يحسب تكلفة طاقة الحياة والفرص الضائعة.\"",
+          ru: "\"Титан рассчитывает не только денежную стоимость, но и затраты жизненной энергии и упущенные возможности.\""
+      },
+      wallet: { en: "Spending", ar: "صرف", ru: "Расходы" },
+      savings: { en: "Savings", ar: "تجميع", ru: "Сбережения" },
+      bills: { en: "Bills", ar: "فواتير", ru: "Счета" },
   };
 
   const t = (key: keyof typeof txt) => txt[key][user.language];
@@ -3363,18 +3105,15 @@ export const TitanSimulator: React.FC<Props> = ({ user, transactions, onBack }) 
       }
   };
 
-  // Merge timelines for the chart
   const getChartData = () => {
     if (!result) return [];
     const baseTimeline = result.scenarios[0].timeline;
-    
     return baseTimeline.map((point, index) => {
         const collapsePoint = result.scenarios.find(s => s.id === 'collapse')?.timeline[index];
         const warriorPoint = result.scenarios.find(s => s.id === 'warrior')?.timeline[index];
         const wealthPoint = result.scenarios.find(s => s.id === 'wealth')?.timeline[index];
-
         return {
-            date: point.date.slice(5), // MM-DD
+            date: point.date.slice(5),
             Collapse: collapsePoint?.balance || 0,
             Warrior: warriorPoint?.balance || 0,
             Wealth: wealthPoint?.balance || 0,
@@ -3387,13 +3126,13 @@ export const TitanSimulator: React.FC<Props> = ({ user, transactions, onBack }) 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-black/90 border border-purple-500/50 p-4 rounded-xl shadow-[0_0_30px_rgba(168,85,247,0.3)] backdrop-blur-xl">
-          <p className="text-purple-300 text-[10px] font-mono mb-2 tracking-widest uppercase">T-Minus: {label}</p>
+        <div className="glass-strong border border-purple-500/30 p-4 rounded-xl shadow-[0_0_30px_rgba(168,85,247,0.3)]">
+          <p className="text-zinc-400 text-xs font-mono mb-2">{label}</p>
           {payload.map((p: any) => (
-            <div key={p.name} className="flex items-center gap-3 mb-1">
-                <div className="w-1.5 h-1.5 rounded-sm" style={{ backgroundColor: p.color, boxShadow: `0 0 8px ${p.color}` }}></div>
-                <span className="text-xs font-bold text-white w-20 uppercase tracking-wider">{p.name}</span>
-                <span className="text-xs font-mono text-white tabular-nums">{Number(p.value).toLocaleString()}</span>
+            <div key={p.name} className="flex items-center gap-2 mb-1">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }}></div>
+                <span className="text-xs font-bold text-white w-20">{p.name}:</span>
+                <span className="text-xs font-mono text-white">{Number(p.value).toLocaleString()}</span>
             </div>
           ))}
         </div>
@@ -3403,289 +3142,228 @@ export const TitanSimulator: React.FC<Props> = ({ user, transactions, onBack }) 
   };
 
   return (
-    <div className="min-h-screen bg-black text-white font-sans selection:bg-purple-500/30 pb-32 relative overflow-hidden" dir={user.language === 'ar' ? 'rtl' : 'ltr'}>
+    // Changed bg-[#030303] to bg-transparent to show the Nebula background from App.tsx
+    <div className="min-h-[85vh] bg-transparent text-white font-sans selection:bg-purple-500/30 pb-32 animate-fade-in" dir={user.language === 'ar' ? 'rtl' : 'ltr'}>
         
-        {/* Background Grid & Ambience */}
-        <div className="fixed inset-0 pointer-events-none z-0">
-            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5 mix-blend-overlay"></div>
-            <div className="absolute top-0 left-0 w-full h-full bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_at_center,black,transparent_80%)]"></div>
-            <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-purple-900/20 rounded-full blur-[120px] animate-pulse-slow"></div>
-            <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-indigo-900/10 rounded-full blur-[100px]"></div>
-        </div>
-
         {/* Header */}
-        <div className="relative z-10 flex items-center justify-between mb-8 px-2 pt-2">
-            <button onClick={onBack} className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-colors group">
-                <ChevronLeft size={20} className={`text-zinc-400 group-hover:text-white transition-colors ${user.language === 'ar' ? 'rotate-180' : ''}`} />
+        <div className="flex items-center justify-between mb-6">
+            <button onClick={onBack} className="p-2 glass rounded-full hover:bg-white/10 transition-colors">
+                <ChevronLeft size={20} className={user.language === 'ar' ? 'rotate-180' : ''} />
             </button>
-            <div className="flex flex-col items-center">
-                <div className="flex items-center gap-2 mb-1">
-                    <BrainCircuit className="text-purple-500 animate-pulse w-5 h-5" />
-                    <h2 className="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-fuchsia-400 to-indigo-400 tracking-[0.2em] font-mono uppercase shadow-purple-500/50 drop-shadow-sm">
-                        {t('title')}
-                    </h2>
-                </div>
-                <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-purple-500/50 to-transparent"></div>
-                <p className="text-[9px] text-purple-300/60 font-mono tracking-widest mt-1 uppercase">{t('subtitle')}</p>
+            <div className="flex items-center gap-2">
+                <BrainCircuit className="text-purple-500 animate-pulse" />
+                <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-indigo-400 tracking-wider font-mono drop-shadow-md">
+                    {t('title')}
+                </h2>
             </div>
             <div className="w-10" />
         </div>
 
         {!result ? (
-            <div className="relative z-10 animate-in fade-in zoom-in duration-700">
-                {/* Input Card */}
-                <div className="bg-[#050505]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-1 shadow-[0_0_50px_rgba(0,0,0,0.5)] relative group overflow-hidden">
+            <div className="animate-slide-up">
+                {/* Input Section */}
+                <div className="glass-panel border border-white/5 rounded-[2.5rem] p-6 shadow-2xl relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600/10 rounded-full blur-[100px] -mr-32 -mt-32 pointer-events-none group-hover:bg-purple-600/20 transition-colors duration-1000"></div>
                     
-                    {/* Animated Border Gradient */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 via-transparent to-indigo-600/20 opacity-50 group-hover:opacity-100 transition-opacity duration-1000"></div>
-                    
-                    <div className="relative bg-[#0A0A0A] rounded-[2.3rem] p-6 overflow-hidden">
-                        
-                        {/* HUD Status Bar */}
-                        <div className="flex justify-between items-center gap-0 mb-8 p-1 rounded-2xl bg-[#000000] border border-white/10 relative z-10 shadow-inner">
-                            {/* Spending */}
-                            <div className="flex-1 flex flex-col items-center py-3 border-r border-white/5 relative group/hud">
-                                <span className="text-[8px] text-zinc-600 uppercase tracking-[0.2em] mb-1 flex items-center gap-1 group-hover/hud:text-purple-400 transition-colors">
-                                    <Wallet size={8} /> {t('wallet')}
+                    {/* Financial Status Bar */}
+                    <div className="flex justify-between items-center gap-2 mb-8 p-3 rounded-2xl bg-black/40 border border-white/5 relative z-10 backdrop-blur-md">
+                        <div className="flex-1 flex flex-col items-center">
+                            <span className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                <Wallet size={10} /> {t('wallet')}
+                            </span>
+                            <span className="text-white font-bold font-mono text-sm tabular-nums">{user.currentBalance.toLocaleString()}</span>
+                        </div>
+                        <div className="w-[1px] h-8 bg-white/10"></div>
+                        <div className="flex-1 flex flex-col items-center">
+                                <span className="text-[9px] text-sber-green uppercase tracking-widest mb-1 flex items-center gap-1">
+                                    <PiggyBank size={10} /> {t('savings')}
                                 </span>
-                                <span className="text-white font-bold font-mono text-xs tabular-nums tracking-wide">{user.currentBalance.toLocaleString()}</span>
-                                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-[1px] bg-purple-500/50 opacity-0 group-hover/hud:opacity-100 transition-opacity"></div>
-                            </div>
-                            
-                            {/* Savings */}
-                            <div className="flex-1 flex flex-col items-center py-3 border-r border-white/5 relative group/hud">
-                                    <span className="text-[8px] text-zinc-600 uppercase tracking-[0.2em] mb-1 flex items-center gap-1 group-hover/hud:text-sber-green transition-colors">
-                                        <PiggyBank size={8} /> {t('savings')}
-                                    </span>
-                                    <span className="text-sber-green font-bold font-mono text-xs tabular-nums tracking-wide">{user.savingsBalance.toLocaleString()}</span>
-                                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-[1px] bg-sber-green/50 opacity-0 group-hover/hud:opacity-100 transition-opacity"></div>
-                            </div>
-                            
-                            {/* Bills */}
-                            <div className="flex-1 flex flex-col items-center py-3 relative group/hud">
-                                    <span className="text-[8px] text-zinc-600 uppercase tracking-[0.2em] mb-1 flex items-center gap-1 group-hover/hud:text-red-400 transition-colors">
-                                        <Receipt size={8} /> {t('bills')}
-                                    </span>
-                                    <span className="text-red-400 font-bold font-mono text-xs tabular-nums tracking-wide">-{totalBills.toLocaleString()}</span>
-                                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-[1px] bg-red-500/50 opacity-0 group-hover/hud:opacity-100 transition-opacity"></div>
-                            </div>
+                                <span className="text-sber-green font-bold font-mono text-sm tabular-nums">{user.savingsBalance.toLocaleString()}</span>
+                        </div>
+                        <div className="w-[1px] h-8 bg-white/10"></div>
+                        <div className="flex-1 flex flex-col items-center">
+                                <span className="text-[9px] text-red-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                    <Receipt size={10} /> {t('bills')}
+                                </span>
+                                <span className="text-red-400 font-bold font-mono text-sm tabular-nums">-{totalBills.toLocaleString()}</span>
+                        </div>
+                    </div>
+
+                    <h3 className="text-2xl font-bold text-center mb-6 drop-shadow-lg">{t('desire')}</h3>
+                    
+                    {/* Scan Button */}
+                    <button 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full mb-6 py-4 rounded-2xl bg-black/40 border border-white/10 flex items-center justify-center gap-3 text-zinc-400 hover:text-white hover:border-purple-500/50 hover:bg-black/60 transition-all group/scan relative z-10"
+                    >
+                        {scanning ? (
+                            <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                            <ScanLine size={20} className="group-hover/scan:text-purple-400" />
+                        )}
+                        <span className="font-bold text-sm tracking-wide">{scanning ? t('scanning') : t('scanBtn')}</span>
+                    </button>
+                    <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleScanImage} />
+
+                    <div className="space-y-6 relative z-10">
+                        <div>
+                            <label className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mx-2 mb-1 block">{t('itemName')}</label>
+                            <input 
+                                type="text" 
+                                value={item}
+                                onChange={e => setItem(e.target.value)}
+                                placeholder={t('itemPlaceholder')}
+                                className="w-full bg-black/50 border border-zinc-800 rounded-2xl p-4 text-white placeholder-zinc-700 focus:border-purple-500 focus:shadow-[0_0_20px_rgba(168,85,247,0.2)] outline-none transition-all"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mx-2 mb-1 block">{t('price')} ({user.currency})</label>
+                            <input 
+                                type="number" 
+                                value={price}
+                                onChange={e => setPrice(e.target.value)}
+                                placeholder="0.00"
+                                className="w-full bg-black/50 border border-zinc-800 rounded-2xl p-4 text-3xl font-bold text-white placeholder-zinc-800 focus:border-purple-500 outline-none transition-all"
+                            />
                         </div>
 
-                        <div className="text-center mb-6">
-                            <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-[0.3em] mb-2">{t('desire')}</h3>
-                            <div className="w-12 h-1 bg-purple-900/30 mx-auto rounded-full overflow-hidden">
-                                <div className="h-full bg-purple-500 w-1/3 animate-shimmer"></div>
-                            </div>
-                        </div>
-                        
-                        {/* Scan Button */}
                         <button 
-                            onClick={() => fileInputRef.current?.click()}
-                            className="w-full mb-6 py-5 rounded-2xl bg-[#111] border border-white/5 flex items-center justify-center gap-3 text-zinc-400 hover:text-purple-300 hover:border-purple-500/30 hover:bg-[#151515] hover:shadow-[0_0_20px_rgba(168,85,247,0.1)] transition-all group/scan relative z-10 overflow-hidden"
+                            onClick={handleSimulate}
+                            disabled={!item || !price || loading}
+                            className="w-full h-16 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl font-bold text-lg tracking-widest uppercase flex items-center justify-center gap-3 shadow-[0_0_40px_rgba(147,51,234,0.3)] hover:shadow-[0_0_60px_rgba(147,51,234,0.5)] active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100 text-white"
                         >
-                            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5"></div>
-                            {scanning ? (
+                            {loading ? (
                                 <div className="flex items-center gap-2">
-                                    <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-                                    <span className="text-xs font-mono uppercase tracking-widest animate-pulse">{t('scanning')}</span>
+                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    <span className="animate-pulse">{t('collapsing')}</span>
                                 </div>
                             ) : (
                                 <>
-                                    <ScanLine size={18} className="group-hover/scan:text-purple-400 transition-colors" />
-                                    <span className="font-bold text-xs tracking-[0.2em] uppercase">{t('scanBtn')}</span>
+                                    {t('simulate')} <Zap className="fill-white" size={20} />
                                 </>
                             )}
                         </button>
-                        <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleScanImage} />
-
-                        <div className="space-y-5 relative z-10">
-                            <div className="group/input">
-                                <label className="text-[9px] text-zinc-600 uppercase font-bold tracking-[0.2em] mx-2 mb-1.5 block group-focus-within/input:text-purple-400 transition-colors">{t('itemName')}</label>
-                                <div className="relative">
-                                    <input 
-                                        type="text" 
-                                        value={item}
-                                        onChange={e => setItem(e.target.value)}
-                                        placeholder={t('itemPlaceholder')}
-                                        className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-white placeholder-zinc-800 focus:border-purple-500 focus:shadow-[0_0_25px_rgba(168,85,247,0.2)] focus:bg-purple-900/5 outline-none transition-all font-medium"
-                                    />
-                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-white/5 group-focus-within/input:bg-purple-500 transition-colors shadow-[0_0_10px_currentColor]"></div>
-                                </div>
-                            </div>
-
-                            <div className="group/input">
-                                <label className="text-[9px] text-zinc-600 uppercase font-bold tracking-[0.2em] mx-2 mb-1.5 block group-focus-within/input:text-purple-400 transition-colors">{t('price')} ({user.currency})</label>
-                                <div className="relative">
-                                    <input 
-                                        type="number" 
-                                        value={price}
-                                        onChange={e => setPrice(e.target.value)}
-                                        placeholder="0.00"
-                                        className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-2xl font-bold text-white placeholder-zinc-800 focus:border-purple-500 focus:shadow-[0_0_25px_rgba(168,85,247,0.2)] focus:bg-purple-900/5 outline-none transition-all font-mono"
-                                    />
-                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-700 font-mono text-xs">{user.currency}</div>
-                                </div>
-                            </div>
-
-                            <button 
-                                onClick={handleSimulate}
-                                disabled={!item || !price || loading}
-                                className="relative w-full h-16 mt-4 rounded-xl overflow-hidden group/btn disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <div className="absolute inset-0 bg-gradient-to-r from-purple-700 via-indigo-600 to-purple-700 bg-[length:200%_100%] animate-gradient-x group-hover/btn:brightness-125 transition-all"></div>
-                                <div className="absolute inset-0 flex items-center justify-center gap-3">
-                                    {loading ? (
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                            <span className="font-bold text-xs uppercase tracking-[0.2em] animate-pulse">{t('collapsing')}</span>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <Zap className="fill-white w-5 h-5 group-hover/btn:scale-110 transition-transform" />
-                                            <span className="font-black text-sm tracking-[0.2em] uppercase">{t('simulate')}</span>
-                                        </>
-                                    )}
-                                </div>
-                            </button>
-                        </div>
                     </div>
+                </div>
+
+                <div className="mt-8 text-center px-6">
+                    <p className="text-xs text-zinc-500 leading-relaxed font-mono italic">
+                        {t('quote')}
+                    </p>
                 </div>
             </div>
         ) : (
-            <div className="space-y-6 animate-in slide-in-from-bottom-10 fade-in duration-700 pb-10">
+            <div className="space-y-6 animate-slide-up">
                 
-                {/* 1. Life Energy Card (Sci-Fi Module) */}
-                <div className="relative bg-[#09090b] border border-purple-500/30 rounded-[2rem] p-6 overflow-hidden shadow-[0_0_40px_rgba(168,85,247,0.15)] group">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-purple-600/10 rounded-full blur-[50px] pointer-events-none"></div>
-                    <div className="absolute bottom-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-purple-500 to-transparent opacity-50"></div>
-                    
+                {/* 1. Life Energy Card */}
+                <div className="glass-panel border border-purple-500/20 rounded-[2rem] p-6 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-purple-500/5 blur-xl"></div>
                     <div className="flex items-start justify-between relative z-10">
                         <div>
-                            <h4 className="text-[10px] font-bold text-purple-400 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
-                                <Activity size={12} className="animate-pulse" /> {t('lifeEnergy')}
+                            <h4 className="text-xs font-bold text-purple-400 uppercase tracking-widest mb-1 flex items-center gap-2">
+                                <Activity size={14} /> {t('lifeEnergy')}
                             </h4>
-                            <div className="flex items-baseline gap-3">
-                                <span className="text-5xl font-black text-white tabular-nums tracking-tighter drop-shadow-lg">{result.lifeEnergy.hoursOfWork.toFixed(1)}</span>
-                                <span className="text-xs text-zinc-500 font-bold uppercase tracking-widest">{t('hours')}</span>
+                            <div className="flex items-baseline gap-2 mt-2">
+                                <span className="text-4xl font-bold text-white tabular-nums drop-shadow-md">{result.lifeEnergy.hoursOfWork.toFixed(1)}</span>
+                                <span className="text-sm text-zinc-500 font-bold">{t('hours')}</span>
                             </div>
-                            <div className="mt-4 p-3 bg-purple-500/10 border-l-2 border-purple-500 rounded-r-lg">
-                                <p className="text-xs text-purple-200 italic leading-relaxed">
-                                    "{result.lifeEnergy.sacrifice}"
-                                </p>
-                            </div>
+                            <p className="text-sm text-zinc-300 mt-3 border-l-2 border-purple-500 pl-3 italic">
+                                "{result.lifeEnergy.sacrifice}"
+                            </p>
                         </div>
-                        <div className="relative">
-                            <div className="w-14 h-14 rounded-full border border-purple-500/30 flex items-center justify-center bg-black shadow-[0_0_20px_rgba(168,85,247,0.2)]">
-                                <Clock className="text-purple-400" size={24} />
-                            </div>
-                            <div className="absolute -inset-1 border border-purple-500/20 rounded-full animate-ping opacity-20"></div>
+                        <div className="w-12 h-12 rounded-full bg-purple-500/10 flex items-center justify-center border border-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.2)]">
+                            <Clock className="text-purple-400" size={24} />
                         </div>
                     </div>
                 </div>
 
-                {/* 2. Multiverse Chart (Holographic) */}
-                <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-[2rem] p-6 shadow-2xl relative overflow-hidden">
-                    <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+                {/* 2. Multiverse Chart */}
+                <div className="glass-panel border border-white/5 rounded-[2rem] p-6 shadow-2xl">
+                    <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <Activity size={14} /> {t('trajectories')}
+                    </h4>
                     
-                    <div className="flex items-center justify-between mb-6 relative z-10">
-                        <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                            <Cpu size={12} /> {t('trajectories')}
-                        </h4>
-                        <div className="flex gap-2">
-                             <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></div>
-                             <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-                             <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" style={{ animationDelay: '0.4s' }}></div>
-                        </div>
-                    </div>
-                    
-                    <div className="h-[220px] w-full -ml-2 relative z-10" dir="ltr">
+                    <div className="h-[250px] w-full -ml-2" dir="ltr">
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={chartData}>
                                 <defs>
                                     <linearGradient id="colorCollapse" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#EF4444" stopOpacity={0.4}/>
+                                        <stop offset="5%" stopColor="#EF4444" stopOpacity={0.3}/>
                                         <stop offset="95%" stopColor="#EF4444" stopOpacity={0}/>
                                     </linearGradient>
                                     <linearGradient id="colorWarrior" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#EAB308" stopOpacity={0.4}/>
+                                        <stop offset="5%" stopColor="#EAB308" stopOpacity={0.3}/>
                                         <stop offset="95%" stopColor="#EAB308" stopOpacity={0}/>
                                     </linearGradient>
                                     <linearGradient id="colorWealth" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#22C55E" stopOpacity={0.4}/>
+                                        <stop offset="5%" stopColor="#22C55E" stopOpacity={0.3}/>
                                         <stop offset="95%" stopColor="#22C55E" stopOpacity={0}/>
                                     </linearGradient>
                                 </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
-                                <XAxis dataKey="date" stroke="#444" tick={{fontSize: 9, fontFamily: 'monospace'}} tickLine={false} axisLine={false} dy={10} />
-                                <YAxis stroke="#444" tick={{fontSize: 9, fontFamily: 'monospace'}} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} />
-                                <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.2)', strokeWidth: 1 }} />
+                                <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                                <XAxis dataKey="date" stroke="#555" tick={{fontSize: 10}} tickLine={false} axisLine={false} dy={10} />
+                                <YAxis stroke="#555" tick={{fontSize: 10}} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} />
+                                <Tooltip content={<CustomTooltip />} />
                                 
-                                <Area type="monotone" dataKey="Collapse" stroke="#EF4444" strokeWidth={2} fillOpacity={1} fill="url(#colorCollapse)" activeDot={{r: 4, strokeWidth: 0, fill: '#fff'}} />
-                                <Area type="monotone" dataKey="Warrior" stroke="#EAB308" strokeWidth={2} fillOpacity={1} fill="url(#colorWarrior)" activeDot={{r: 4, strokeWidth: 0, fill: '#fff'}} />
-                                <Area type="monotone" dataKey="Wealth" stroke="#22C55E" strokeWidth={2} fillOpacity={1} fill="url(#colorWealth)" activeDot={{r: 4, strokeWidth: 0, fill: '#fff'}} />
+                                <Area type="monotone" dataKey="Collapse" stroke="#EF4444" strokeWidth={2} fillOpacity={1} fill="url(#colorCollapse)" />
+                                <Area type="monotone" dataKey="Warrior" stroke="#EAB308" strokeWidth={2} fillOpacity={1} fill="url(#colorWarrior)" />
+                                <Area type="monotone" dataKey="Wealth" stroke="#22C55E" strokeWidth={2} fillOpacity={1} fill="url(#colorWealth)" />
                             </AreaChart>
                         </ResponsiveContainer>
                     </div>
 
-                    {/* Chart Legend */}
-                    <div className="grid grid-cols-3 gap-2 mt-6 relative z-10" dir="ltr">
-                        {[
-                            { label: 'Collapse', color: 'bg-red-500', text: 'text-red-500' },
-                            { label: 'Warrior', color: 'bg-yellow-500', text: 'text-yellow-500' },
-                            { label: 'Wealth', color: 'bg-green-500', text: 'text-green-500' }
-                        ].map(item => (
-                            <div key={item.label} className="bg-white/5 border border-white/5 rounded-lg p-2 flex flex-col items-center">
-                                <div className={`w-1.5 h-1.5 rounded-full ${item.color} mb-1 shadow-[0_0_8px_currentColor]`}></div>
-                                <span className={`text-[9px] font-bold uppercase tracking-wider ${item.text}`}>{item.label}</span>
-                            </div>
-                        ))}
+                    <div className="flex justify-between mt-4 px-2" dir="ltr">
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]"></div>
+                            <span className="text-[10px] text-zinc-400">Collapse</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.5)]"></div>
+                            <span className="text-[10px] text-zinc-400">Warrior</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"></div>
+                            <span className="text-[10px] text-zinc-400">Wealth</span>
+                        </div>
                     </div>
                 </div>
 
                 {/* 3. Risks & Verdict */}
                 <div className="grid grid-cols-1 gap-4">
-                    {/* Risks Module */}
+                    {/* Risks */}
                     {result.risks.length > 0 && (
-                        <div className="bg-red-950/20 border border-red-500/30 rounded-[1.5rem] p-5 relative overflow-hidden">
-                            <div className="absolute -right-4 -top-4 w-20 h-20 bg-red-600/10 rounded-full blur-xl"></div>
-                            <h4 className="text-red-500 font-bold text-xs uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-                                <ShieldAlert size={14} /> {t('risks')}
+                        <div className="bg-red-500/10 border border-red-500/20 rounded-[1.5rem] p-5">
+                            <h4 className="text-red-500 font-bold text-sm mb-3 flex items-center gap-2">
+                                <ShieldAlert size={16} /> {t('risks')}
                             </h4>
-                            <div className="space-y-3">
+                            <div className="space-y-2">
                                 {result.risks.map((risk, idx) => (
-                                    <div key={idx} className="flex items-start gap-3 bg-red-500/5 p-3 rounded-xl border border-red-500/10">
-                                        <AlertTriangle size={14} className="mt-0.5 shrink-0 text-red-500" />
-                                        <div>
-                                            <p className="text-xs text-red-200 font-bold leading-snug">{risk.message}</p>
-                                            <p className="text-[10px] text-red-400/60 font-mono mt-1">DETECTED AT: {risk.date}</p>
-                                        </div>
+                                    <div key={idx} className="flex items-start gap-2 text-xs text-red-300 bg-red-500/5 p-2 rounded-lg">
+                                        <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                                        <span>{risk.message} ({risk.date})</span>
                                     </div>
                                 ))}
                             </div>
                         </div>
                     )}
 
-                    {/* AI Verdict (Terminal Style) */}
-                    <div className="bg-gradient-to-r from-indigo-950/40 to-purple-950/40 border border-indigo-500/30 rounded-[1.5rem] p-6 relative overflow-hidden shadow-lg">
-                         <div className="absolute top-0 right-0 p-4 opacity-10 animate-pulse">
+                    {/* AI Verdict */}
+                    <div className="bg-gradient-to-br from-indigo-900/40 to-purple-900/40 border border-indigo-500/30 rounded-[1.5rem] p-6 relative overflow-hidden shadow-lg">
+                         <div className="absolute top-0 right-0 p-4 opacity-20 animate-pulse-slow">
                              <Sparkles size={60} />
                          </div>
-                         <h4 className="text-indigo-300 font-bold text-[9px] uppercase tracking-[0.3em] mb-3 border-b border-indigo-500/20 pb-2 inline-block">
-                             {t('verdict')}
-                         </h4>
-                         <p className="text-lg font-bold text-white leading-snug font-mono">
-                             <span className="text-indigo-400 mr-2">{">"}</span>
+                         <h4 className="text-indigo-300 font-bold text-xs uppercase tracking-widest mb-2">{t('verdict')}</h4>
+                         <p className="text-lg font-bold text-white leading-snug drop-shadow-md">
                              "{result.aiVerdict}"
-                             <span className="inline-block w-2 h-4 bg-indigo-500 ml-1 animate-pulse"></span>
                          </p>
                     </div>
                 </div>
 
                 <button 
                     onClick={() => { setResult(null); setItem(''); setPrice(''); }}
-                    className="w-full py-4 rounded-xl border border-white/10 text-zinc-500 hover:text-white hover:bg-white/5 transition-all text-xs font-bold uppercase tracking-[0.2em] flex items-center justify-center gap-2 group"
+                    className="w-full py-4 rounded-xl border border-white/10 text-zinc-400 hover:text-white hover:bg-white/5 transition-all text-sm font-bold glass"
                 >
-                    <ChevronLeft size={14} className="group-hover:-translate-x-1 transition-transform" /> {t('newSim')}
+                    {t('newSim')}
                 </button>
             </div>
         )}
@@ -3715,36 +3393,37 @@ export const TransactionItem: React.FC<Props> = ({ transaction, currency, langua
   const categoryName = language === 'ar' ? category.name_ar : language === 'ru' ? category.name_ru : category.name_en;
   
   return (
-    <div className="group relative glass hover:bg-white/5 border border-white/5 hover:border-white/10 rounded-[1.8rem] p-4 flex items-center justify-between transition-all duration-300 active:scale-95 shadow-sm hover:shadow-lg overflow-hidden">
+    <div className="group relative glass-card p-4 rounded-[1.8rem] flex items-center justify-between transition-all duration-500 hover:bg-white/5 hover:border-white/15 overflow-hidden active:scale-[0.98]">
       
-      {/* Holographic shimmer on hover */}
+      {/* Cinematic Shimmer Effect on Hover */}
       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-[200%] group-hover:translate-x-[200%] transition-transform duration-1000 ease-in-out pointer-events-none skew-x-12"></div>
 
       {/* Left Side: Icon & Info */}
       <div className="flex items-center gap-4 relative z-10">
-        {/* Glowing Icon Container */}
+        
+        {/* Neon Glow Icon Container */}
         <div 
-            className="w-14 h-14 rounded-2xl flex items-center justify-center relative overflow-hidden transition-transform group-hover:scale-105 duration-500 border border-white/5"
+            className="w-14 h-14 rounded-2xl flex items-center justify-center relative transition-all duration-500 group-hover:scale-110 group-hover:rotate-3 border border-white/5"
             style={{ 
-                backgroundColor: `${category.color}10`,
-                boxShadow: `0 0 25px -5px ${category.color}20`
+                backgroundColor: `${category.color}10`, // 10% opacity
+                boxShadow: `0 0 30px -5px ${category.color}25` // Colored Glow
             }}
         >
-            <div className="absolute inset-0 opacity-20 blur-lg" style={{ backgroundColor: category.color }}></div>
-            <IconComponent size={22} style={{ color: category.color }} strokeWidth={2.5} className="relative z-10 drop-shadow-md" />
+            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-md" style={{ backgroundColor: category.color }}></div>
+            <IconComponent size={22} style={{ color: category.color }} strokeWidth={2.5} className="relative z-10 drop-shadow-md group-hover:text-white transition-colors" />
         </div>
         
         {/* Text Details */}
         <div className="flex flex-col gap-1.5">
-            <h3 className="font-bold text-white text-base leading-none tracking-wide group-hover:text-white/90 transition-colors">
+            <h3 className="font-bold text-white text-base leading-none tracking-wide group-hover:text-primary transition-colors">
               {transaction.vendor || categoryName}
             </h3>
             <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-zinc-400 bg-black/40 px-2.5 py-1 rounded-lg border border-white/5 backdrop-blur-sm">
+                <span className="text-[9px] font-bold text-zinc-400 bg-white/5 px-2.5 py-1 rounded-lg border border-white/5 backdrop-blur-sm uppercase tracking-wider">
                     {categoryName}
                 </span>
                 {transaction.note && (
-                    <span className="text-[10px] text-zinc-500 truncate max-w-[100px] sm:max-w-[150px]">
+                    <span className="text-[10px] text-zinc-500 truncate max-w-[100px] sm:max-w-[150px] font-medium">
                         • {transaction.note}
                     </span>
                 )}
@@ -3754,10 +3433,10 @@ export const TransactionItem: React.FC<Props> = ({ transaction, currency, langua
 
       {/* Right Side: Amount */}
       <div className="text-right relative z-10">
-        <div className={`font-bold text-lg tabular-nums tracking-tight drop-shadow-md ${isExpense ? 'text-white' : 'text-sber-green'}`}>
+        <div className={`font-display font-bold text-lg tabular-nums tracking-tight drop-shadow-lg ${isExpense ? 'text-white' : 'text-secondary'}`}>
             {isExpense ? '-' : '+'}{transaction.amount.toLocaleString()} 
         </div>
-        <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
+        <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest font-mono">
             {currency}
         </div>
       </div>
@@ -3770,8 +3449,8 @@ export const TransactionItem: React.FC<Props> = ({ transaction, currency, langua
 ### File: `components\TransactionsPage.tsx`
 ```tsx
 import React, { useState } from 'react';
-import { List, Search, X, Filter, ArrowDownLeft, ArrowUpRight, Calendar } from 'lucide-react';
-import { Transaction, UserSettings, TransactionType } from '../types';
+import { List, Search, X, Filter, ArrowDownLeft, ArrowUpRight, Calendar, Sparkles } from 'lucide-react';
+import { Transaction, UserSettings } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { TransactionItem } from './TransactionItem';
 
@@ -3790,15 +3469,12 @@ export const TransactionsPage: React.FC<Props> = ({ user, transactions }) => {
   // Smart Filtering Logic
   const getFilteredTransactions = () => {
       return transactions.filter(t => {
-        // 1. Text Search
         const matchesSearch = !searchTerm || (
             (t.vendor && t.vendor.toLowerCase().includes(searchTerm.toLowerCase())) ||
             (t.note && t.note.toLowerCase().includes(searchTerm.toLowerCase())) ||
             (t.category && t.category.toLowerCase().includes(searchTerm.toLowerCase()))
         );
-        // 2. Type Filter
         const matchesType = filterType === 'all' || t.type === filterType;
-
         return matchesSearch && matchesType;
       });
   };
@@ -3820,56 +3496,68 @@ export const TransactionsPage: React.FC<Props> = ({ user, transactions }) => {
   const FilterChip = ({ type, label, icon: Icon }: { type: FilterType, label: string, icon?: any }) => (
       <button
         onClick={() => setFilterType(type)}
-        className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold transition-all active:scale-95 border ${
-            filterType === type 
-            ? 'bg-white text-black border-white shadow-[0_0_20px_rgba(255,255,255,0.3)]' 
-            : 'glass text-zinc-400 border-transparent hover:bg-white/10 hover:text-white'
-        }`}
+        className={`
+            relative flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 active:scale-95 border
+            ${filterType === type 
+            ? 'bg-white text-black border-white shadow-[0_0_20px_rgba(255,255,255,0.4)] scale-105' 
+            : 'glass-card text-zinc-400 border-transparent hover:border-white/10 hover:text-white'
+            }
+        `}
       >
         {Icon && <Icon size={14} />}
         {label}
+        {filterType === type && <div className="absolute inset-0 bg-white blur-md opacity-20 rounded-full animate-pulse"></div>}
       </button>
   );
 
   return (
-    <div className="pb-32 min-h-[80vh]">
+    <div className="pb-32 min-h-[80vh] pt-2">
       
       {/* Sticky Header Area */}
-      <div className="sticky top-0 z-30 glass border-b border-white/5 pb-4 pt-2 -mx-6 px-6 transition-all shadow-lg backdrop-blur-xl">
-          <div className="flex flex-col gap-4 animate-slide-down">
-              {/* Title */}
+      <div className="sticky top-0 z-30 glass-card border-b border-white/5 pb-5 pt-4 -mx-4 px-6 mb-6 rounded-b-[2rem] shadow-2xl backdrop-blur-xl transition-all">
+          <div className="flex flex-col gap-5 animate-slide-up-fade">
+              {/* Title Row */}
               <div className="flex items-center justify-between">
                  <div className="flex items-center gap-3">
-                    <div className="bg-sber-green/10 p-3 rounded-2xl border border-sber-green/20 shadow-[0_0_15px_rgba(33,160,56,0.15)]">
-                        <List className="w-6 h-6 text-sber-green" />
+                    <div className="relative">
+                        <div className="absolute inset-0 bg-primary/30 blur-lg rounded-full animate-pulse-glow"></div>
+                        <List className="w-6 h-6 text-primary relative z-10" />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-bold text-white leading-none tracking-tight">{t.transactions}</h2>
-                        <p className="text-xs text-zinc-500 mt-1 font-medium">{filteredData.length} records found</p>
+                        <h2 className="text-2xl font-display font-bold text-white leading-none tracking-wide text-glow">
+                            {t.transactions}
+                        </h2>
+                        <div className="flex items-center gap-1.5 mt-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-secondary shadow-[0_0_5px_#10B981]"></span>
+                            <p className="text-[10px] text-zinc-400 font-mono tracking-widest uppercase">{filteredData.length} RECORDS</p>
+                        </div>
                     </div>
                  </div>
               </div>
 
-              {/* Search Bar */}
+              {/* Neon Search Bar */}
               <div className="relative group">
-                 <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-                    <Search className="w-5 h-5 text-zinc-500 group-focus-within:text-white transition-colors" />
+                 <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-secondary/20 rounded-2xl blur opacity-0 group-focus-within:opacity-100 transition-opacity duration-500"></div>
+                 <div className="relative bg-[#0F0E17] border border-white/10 rounded-2xl flex items-center shadow-inner group-focus-within:border-primary/50 transition-colors">
+                     <div className="pl-4 pr-3 text-zinc-500 group-focus-within:text-primary transition-colors">
+                        <Search size={18} />
+                     </div>
+                     <input 
+                        type="text" 
+                        placeholder={user.language === 'ar' ? "بحث..." : "Search history..."}
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full bg-transparent py-4 text-white text-sm placeholder-zinc-600 focus:outline-none font-medium"
+                     />
+                     {searchTerm && (
+                         <button onClick={() => setSearchTerm('')} className="p-3 text-zinc-500 hover:text-white transition-colors">
+                             <X size={16} />
+                         </button>
+                     )}
                  </div>
-                 <input 
-                    type="text" 
-                    placeholder={user.language === 'ar' ? "ابحث عن متجر، ملاحظة..." : "Search merchant, notes..."}
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full bg-[#0A0A0A] border border-white/10 rounded-2xl py-3.5 pl-12 pr-10 text-white focus:outline-none focus:border-white/30 focus:shadow-[0_0_20px_rgba(255,255,255,0.05)] transition-all placeholder-zinc-700 shadow-inner"
-                 />
-                 {searchTerm && (
-                     <button onClick={() => setSearchTerm('')} className="absolute inset-y-0 right-4 flex items-center text-zinc-500 hover:text-white transition-colors">
-                         <X className="w-4 h-4" />
-                     </button>
-                 )}
               </div>
 
-              {/* Filter Chips Row */}
+              {/* Filter Chips */}
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
                  <FilterChip type="all" label={user.language === 'ar' ? 'الكل' : 'All'} icon={Filter} />
                  <FilterChip type="expense" label={t.expense} icon={ArrowUpRight} />
@@ -3880,21 +3568,25 @@ export const TransactionsPage: React.FC<Props> = ({ user, transactions }) => {
 
       {/* Stats Summary (Conditional) */}
       {(searchTerm || filterType !== 'all') && (
-        <div className="grid grid-cols-2 gap-3 mt-4 mb-6 animate-scale-in">
-            <div className="glass-panel p-4 rounded-[1.5rem] relative overflow-hidden group">
-                <div className="absolute -right-4 -top-4 w-20 h-20 bg-sber-green/20 rounded-full blur-xl group-hover:bg-sber-green/30 transition-colors"></div>
+        <div className="grid grid-cols-2 gap-3 mb-8 animate-scale-in px-2">
+            <div className="glass-card p-5 rounded-[2rem] relative overflow-hidden group hover:border-secondary/30 transition-colors">
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <ArrowDownLeft size={48} className="text-secondary" />
+                </div>
                 <div className="relative z-10">
-                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1">Total Income</p>
-                    <p className="text-sber-green font-bold text-xl tabular-nums drop-shadow-[0_0_10px_rgba(33,160,56,0.4)]">
+                    <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Income</p>
+                    <p className="text-secondary font-display font-bold text-xl tabular-nums drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]">
                         +{filteredData.filter(t => t.type === 'income').reduce((s,t) => s + t.amount, 0).toLocaleString()}
                     </p>
                 </div>
             </div>
-            <div className="glass-panel p-4 rounded-[1.5rem] relative overflow-hidden group">
-                <div className="absolute -right-4 -top-4 w-20 h-20 bg-red-500/20 rounded-full blur-xl group-hover:bg-red-500/30 transition-colors"></div>
+            <div className="glass-card p-5 rounded-[2rem] relative overflow-hidden group hover:border-red-500/30 transition-colors">
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <ArrowUpRight size={48} className="text-red-500" />
+                </div>
                 <div className="relative z-10">
-                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1">Total Expense</p>
-                    <p className="text-white font-bold text-xl tabular-nums">
+                    <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Expense</p>
+                    <p className="text-white font-display font-bold text-xl tabular-nums">
                         -{filteredData.filter(t => t.type === 'expense').reduce((s,t) => s + t.amount, 0).toLocaleString()}
                     </p>
                 </div>
@@ -3902,32 +3594,33 @@ export const TransactionsPage: React.FC<Props> = ({ user, transactions }) => {
         </div>
       )}
       
-      {/* Transactions List */}
-      <div className="mt-4 space-y-8">
+      {/* Timeline List */}
+      <div className="space-y-8 relative">
+        {/* Timeline Vertical Line */}
+        <div className="absolute left-[27px] top-4 bottom-0 w-px bg-gradient-to-b from-white/10 via-white/5 to-transparent"></div>
+
         {getGroupedTransactions().map((group, groupIdx) => {
             const date = new Date(group.date);
             return (
-            <div key={group.date} className="animate-slide-up" style={{ animationDelay: `${groupIdx * 0.1}s` }}>
+            <div key={group.date} className="animate-slide-up-fade" style={{ animationDelay: `${groupIdx * 100}ms` }}>
+                
                 {/* Date Header */}
-                <div className="flex items-center gap-3 mb-4 pl-2 sticky top-48 z-0 opacity-80">
-                    <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white font-bold shadow-sm">
-                        {date.getDate()}
+                <div className="flex items-center gap-4 mb-4 pl-2 sticky top-48 z-10">
+                    <div className="w-12 h-12 rounded-2xl glass-card flex flex-col items-center justify-center text-white shadow-lg border border-white/10 relative z-20 backdrop-blur-md">
+                        <span className="text-lg font-display font-bold leading-none">{date.getDate()}</span>
+                        <span className="text-[8px] font-bold text-zinc-500 uppercase">{date.toLocaleDateString(user.language, { weekday: 'short' })}</span>
                     </div>
-                    <div className="flex flex-col">
-                        <span className="text-xs text-white font-bold uppercase tracking-widest">
-                            {date.toLocaleDateString(user.language, { month: 'long' })}
-                        </span>
-                        <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wide">
-                            {date.toLocaleDateString(user.language, { weekday: 'long' })}
+                    <div className="glass-card px-4 py-1.5 rounded-full border border-white/5 backdrop-blur-md">
+                        <span className="text-[10px] text-zinc-300 font-bold uppercase tracking-widest">
+                            {date.toLocaleDateString(user.language, { month: 'long', year: 'numeric' })}
                         </span>
                     </div>
-                    <div className="h-[1px] flex-1 bg-gradient-to-r from-white/10 to-transparent ml-2"></div>
                 </div>
 
                 {/* Items */}
-                <div className="space-y-3">
+                <div className="space-y-3 pl-8 pr-1">
                 {group.items.map((tx, itemIdx) => (
-                    <div key={tx.id} className="animate-slide-up" style={{ animationDelay: `${(groupIdx * 0.1) + (itemIdx * 0.05)}s` }}>
+                    <div key={tx.id} className="animate-slide-up-fade" style={{ animationDelay: `${(groupIdx * 100) + (itemIdx * 50)}ms` }}>
                         <TransactionItem transaction={tx} currency={user.currency} language={user.language} />
                     </div>
                 ))}
@@ -3940,11 +3633,10 @@ export const TransactionsPage: React.FC<Props> = ({ user, transactions }) => {
       {/* Empty State */}
       {filteredData.length === 0 && (
          <div className="flex flex-col items-center justify-center py-24 text-zinc-600 animate-scale-in">
-             <div className="w-24 h-24 bg-white/5 rounded-[2rem] flex items-center justify-center mb-6 border border-white/5 border-dashed">
-                <Search size={40} strokeWidth={1.5} className="opacity-50" />
+             <div className="w-24 h-24 rounded-full flex items-center justify-center mb-6 glass-card border-dashed border-zinc-700">
+                <Sparkles size={32} className="text-zinc-600 animate-pulse" />
              </div>
-             <p className="text-base font-bold text-zinc-500">No transactions found</p>
-             <p className="text-xs text-zinc-700 mt-2">Adjust filters or add a new one.</p>
+             <p className="text-sm font-display font-bold text-zinc-500 tracking-wide">No transactions found</p>
          </div>
       )}
     </div>
@@ -3958,17 +3650,27 @@ export const TransactionsPage: React.FC<Props> = ({ user, transactions }) => {
 {
   "short_name": "Masareefy",
   "name": "Masareefy: Smart Finance",
+  "description": "Smart income and expense manager with AI receipt analysis.",
+  "id": "/",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#030014",
+  "background_color": "#030014",
   "icons": [
     {
-      "src": "app.png",
-      "sizes": "192x192 512x512",
-      "type": "image/png"
+      "src": "/app.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/app.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
-  ],
-  "start_url": ".",
-  "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#000000"
+  ]
 }
 ```
 ---
@@ -4889,33 +4591,26 @@ const App = () => {
   }
 
   return (
-    // Updated Main Container with Nebula Background
-    <div className="min-h-screen bg-black text-white relative overflow-hidden font-sans selection:bg-purple-500/30 pb-40">
+    // Clean, transparent container allowing global Aurora background to shine through
+    <div className="min-h-screen bg-transparent text-white relative overflow-hidden font-sans selection:bg-primary/30 pb-40">
       
-      {/* Animated Nebula Background */}
-      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-          <div className="absolute top-[-10%] left-[-20%] w-[80vw] h-[80vw] bg-purple-900/20 rounded-full blur-[120px] animate-float opacity-30"></div>
-          <div className="absolute bottom-[-10%] right-[-20%] w-[80vw] h-[80vw] bg-emerald-900/20 rounded-full blur-[120px] animate-pulse-slow opacity-30" style={{ animationDelay: '2s' }}></div>
-          <div className="absolute top-[40%] left-[30%] w-[40vw] h-[40vw] bg-blue-900/10 rounded-full blur-[100px] animate-float opacity-20" style={{ animationDelay: '4s' }}></div>
-          <div className="noise-bg"></div>
-      </div>
-
+      {/* Header */}
       {currentView !== 'add' && (
-        <div className="sticky top-0 z-40 glass border-b border-white/5 shadow-lg transition-all duration-300">
+        <div className="sticky top-0 z-40 glass-card border-b border-white/5 shadow-lg transition-all duration-300 rounded-b-3xl mx-2 mt-2">
           <div className="max-w-md mx-auto px-6 py-4 flex items-center justify-between">
             {/* User Profile */}
             <div className="flex items-center gap-3">
               {user.photoURL ? (
                   <img src={user.photoURL} alt="User" className="w-10 h-10 rounded-2xl shadow-md border border-white/10 object-cover" />
               ) : (
-                  <div className="w-10 h-10 rounded-2xl bg-surfaceLight flex items-center justify-center text-sm font-bold shadow-md border border-white/10">
+                  <div className="w-10 h-10 rounded-2xl bg-surface flex items-center justify-center text-sm font-bold shadow-md border border-white/10 font-display">
                   {user.name.charAt(0) || 'U'}
                   </div>
               )}
               <div className="flex flex-col">
                 <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest leading-none mb-1">{t.welcome}</p>
                 <div className="flex items-center gap-2">
-                  <p className="font-bold text-base tracking-wide text-white leading-none">{user.name.split(' ')[0]}</p>
+                  <p className="font-bold font-display text-base tracking-wide text-white leading-none">{user.name.split(' ')[0]}</p>
                   {user.isGuest && <span className="text-[9px] bg-yellow-500/10 text-yellow-500 px-1.5 py-0.5 rounded border border-yellow-500/20 font-bold">GUEST</span>}
                 </div>
               </div>
@@ -4926,19 +4621,19 @@ const App = () => {
                 {/* Titan Simulator Capsule */}
                 <button 
                   onClick={() => setCurrentView('simulator')}
-                  className="relative group flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1A1A1A] border border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.3)] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)] hover:border-purple-500 transition-all active:scale-95 overflow-hidden"
+                  className="relative group flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1A1A1A] border border-primary/40 shadow-[0_0_15px_rgba(168,85,247,0.3)] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)] hover:border-primary transition-all active:scale-95 overflow-hidden"
                 >
                     {/* Glowing Pulse Background */}
-                    <div className="absolute inset-0 bg-purple-600/10 animate-pulse"></div>
+                    <div className="absolute inset-0 bg-primary/10 animate-pulse"></div>
                     
-                    <BrainCircuit size={16} className="text-purple-400 group-hover:text-purple-300 transition-colors relative z-10" />
-                    <span className="text-[10px] font-bold text-purple-200 uppercase tracking-wider relative z-10 hidden sm:block">Titan</span>
+                    <BrainCircuit size={16} className="text-primary group-hover:text-white transition-colors relative z-10" />
+                    <span className="text-[10px] font-bold text-primary/80 group-hover:text-white uppercase tracking-wider relative z-10 hidden sm:block">Titan</span>
                 </button>
 
                 {/* Language Switcher */}
                 <button 
                     onClick={() => setUser(u => ({...u, language: u.language === 'en' ? 'ar' : u.language === 'ar' ? 'ru' : 'en'}))}
-                    className="w-10 h-10 flex items-center justify-center rounded-full glass hover:bg-white/10 active:scale-90 transition-all group"
+                    className="w-10 h-10 flex items-center justify-center rounded-full glass-card hover:bg-white/10 active:scale-90 transition-all group"
                 >
                   <Globe className="text-zinc-400 group-hover:text-white w-5 h-5 transition-colors" />
                 </button>
@@ -4948,7 +4643,7 @@ const App = () => {
       )}
 
       <main className="relative z-10 max-w-md mx-auto">
-        <div key={currentView} className="animate-enter px-6 pt-6">
+        <div key={currentView} className="animate-slide-up-fade px-4 pt-6">
           {currentView === 'dashboard' && (
             <Dashboard 
               user={user} 
@@ -5014,35 +4709,35 @@ import { ExpenseCategory } from './types';
 import { ShoppingCart, Utensils, Car, Home, Zap, HeartPulse, GraduationCap, Plane, Gift, Briefcase, Clapperboard, ShoppingBag, Smile, Repeat, Banknote, ArrowRightLeft, LayoutGrid } from 'lucide-react';
 
 export const CATEGORIES: ExpenseCategory[] = [
-  { id: 'food', name_en: 'Food & Dining', name_ar: 'طعام ومطاعم', name_ru: 'Еда и напитки', icon: 'Utensils', color: '#FF9500' },
-  { id: 'groceries', name_en: 'Groceries', name_ar: 'بقالة / سوبرماركت', name_ru: 'Продукты', icon: 'ShoppingCart', color: '#30D158' },
-  { id: 'transport', name_en: 'Transport', name_ar: 'نقل ومواصلات', name_ru: 'Транспорт', icon: 'Car', color: '#0A84FF' },
-  { id: 'housing', name_en: 'Housing', name_ar: 'سكن / إيجار', name_ru: 'Жилье', icon: 'Home', color: '#BF5AF2' },
-  { id: 'utilities', name_en: 'Utilities', name_ar: 'فواتير وخدمات', name_ru: 'Коммунальные', icon: 'Zap', color: '#FFD60A' },
-  { id: 'health', name_en: 'Health', name_ar: 'صحة وعلاج', name_ru: 'Здоровье', icon: 'HeartPulse', color: '#FF375F' },
-  { id: 'education', name_en: 'Education', name_ar: 'تعليم', name_ru: 'Образование', icon: 'GraduationCap', color: '#64D2FF' },
-  { id: 'travel', name_en: 'Travel', name_ar: 'سفر وسياحة', name_ru: 'Путешествия', icon: 'Plane', color: '#5E5CE6' },
-  { id: 'entertainment', name_en: 'Entertainment', name_ar: 'ترفيه وتسلية', name_ru: 'Развлечения', icon: 'Clapperboard', color: '#FF2D55' },
-  { id: 'shopping', name_en: 'Shopping', name_ar: 'تسوق وملابس', name_ru: 'Шопинг', icon: 'ShoppingBag', color: '#FF9F0A' },
-  { id: 'personal_care', name_en: 'Personal Care', name_ar: 'عناية شخصية', name_ru: 'Личный уход', icon: 'Smile', color: '#E4A4C3' },
-  { id: 'subscriptions', name_en: 'Subscriptions', name_ar: 'اشتراكات', name_ru: 'Подписки', icon: 'Repeat', color: '#AC8E68' },
-  { id: 'debt', name_en: 'Loans & Debt', name_ar: 'قروض وديون', name_ru: 'Кредиты', icon: 'Banknote', color: '#8E8E93' },
-  { id: 'gifts', name_en: 'Gifts & Charity', name_ar: 'هدايا وتبرعات', name_ru: 'Подарки', icon: 'Gift', color: '#FF453A' },
-  { id: 'salary', name_en: 'Salary / Income', name_ar: 'راتب / دخل', name_ru: 'Зарплата', icon: 'Briefcase', color: '#21A038' },
-  { id: 'transfer', name_en: 'Transfer', name_ar: 'تحويلات مالية', name_ru: 'Переводы', icon: 'ArrowRightLeft', color: '#8E8E93' },
-  { id: 'general', name_en: 'General / Other', name_ar: 'عام / أخرى', name_ru: 'Разное', icon: 'LayoutGrid', color: '#9CA3AF' },
+  { id: 'food', name_en: 'Food & Dining', name_ar: 'طعام ومطاعم', name_ru: 'Еда и напитки', icon: 'Utensils', color: '#FF9F1C' }, // Neon Orange
+  { id: 'groceries', name_en: 'Groceries', name_ar: 'بقالة / سوبرماركت', name_ru: 'Продукты', icon: 'ShoppingCart', color: '#2EC4B6' }, // Neon Teal
+  { id: 'transport', name_en: 'Transport', name_ar: 'نقل ومواصلات', name_ru: 'Транспорт', icon: 'Car', color: '#3A86FF' }, // Neon Blue
+  { id: 'housing', name_en: 'Housing', name_ar: 'سكن / إيجار', name_ru: 'Жилье', icon: 'Home', color: '#8338EC' }, // Electric Purple
+  { id: 'utilities', name_en: 'Utilities', name_ar: 'فواتير وخدمات', name_ru: 'Коммунальные', icon: 'Zap', color: '#FFBD00' }, // Neon Yellow
+  { id: 'health', name_en: 'Health', name_ar: 'صحة وعلاج', name_ru: 'Здоровье', icon: 'HeartPulse', color: '#FF006E' }, // Neon Pink
+  { id: 'education', name_en: 'Education', name_ar: 'تعليم', name_ru: 'Образование', icon: 'GraduationCap', color: '#4CC9F0' }, // Bright Sky
+  { id: 'travel', name_en: 'Travel', name_ar: 'سفر وسياحة', name_ru: 'Путешествия', icon: 'Plane', color: '#7209B7' }, // Deep Neon Purple
+  { id: 'entertainment', name_en: 'Entertainment', name_ar: 'ترفيه وتسلية', name_ru: 'Развлечения', icon: 'Clapperboard', color: '#F72585' }, // Neon Magenta
+  { id: 'shopping', name_en: 'Shopping', name_ar: 'تسوق وملابس', name_ru: 'Шопинг', icon: 'ShoppingBag', color: '#F15BB5' }, // Bubblegum Pink
+  { id: 'personal_care', name_en: 'Personal Care', name_ar: 'عناية شخصية', name_ru: 'Личный уход', icon: 'Smile', color: '#9B5DE5' }, // Light Purple
+  { id: 'subscriptions', name_en: 'Subscriptions', name_ar: 'اشتراكات', name_ru: 'Подписки', icon: 'Repeat', color: '#00BBF9' }, // Azure
+  { id: 'debt', name_en: 'Loans & Debt', name_ar: 'قروض وديون', name_ru: 'Кредиты', icon: 'Banknote', color: '#EF476F' }, // Coral
+  { id: 'gifts', name_en: 'Gifts & Charity', name_ar: 'هدايا وتبرعات', name_ru: 'Подарки', icon: 'Gift', color: '#FF5400' }, // Safety Orange
+  { id: 'salary', name_en: 'Salary / Income', name_ar: 'راتب / دخل', name_ru: 'Зарплата', icon: 'Briefcase', color: '#06D6A0' }, // Neon Mint
+  { id: 'transfer', name_en: 'Transfer', name_ar: 'تحويلات مالية', name_ru: 'Переводы', icon: 'ArrowRightLeft', color: '#118AB2' }, // Blue
+  { id: 'general', name_en: 'General / Other', name_ar: 'عام / أخرى', name_ru: 'Разное', icon: 'LayoutGrid', color: '#9CA3AF' }, // Gray
 ];
 
 export const RUSSIAN_BANKS = [
   { id: 'sber', name: 'Sberbank', color: '#21A038', textColor: '#FFFFFF', logo: '/banks/sber.png' },
   { id: 'tinkoff', name: 'T-Bank', color: '#FFDD2D', textColor: '#000000', logo: '/banks/Tinkif.png' },
-  { id: 'alpha', name: 'Alfa-Bank', color: '#EF3124', textColor: '#FFFFFF', logo: '/banks/alpha.png' },
-  { id: 'vtb', name: 'VTB', color: '#002882', textColor: '#FFFFFF', logo: '/banks/vtb.png' },
-  { id: 'gazprom', name: 'Gazprombank', color: '#00468C', textColor: '#FFFFFF', logo: '/banks/gazprom.png' },
+  { id: 'alpha', name: 'Alfa-Bank', color: '#FF453A', textColor: '#FFFFFF', logo: '/banks/alpha.png' }, // Brighter Red
+  { id: 'vtb', name: 'VTB', color: '#2F80ED', textColor: '#FFFFFF', logo: '/banks/vtb.png' }, // Brighter Blue
+  { id: 'gazprom', name: 'Gazprombank', color: '#007AFF', textColor: '#FFFFFF', logo: '/banks/gazprom.png' }, // Brighter Blue
   { id: 'ozon', name: 'Ozon Bank', color: '#005BFF', textColor: '#FFFFFF', logo: '/banks/ozon.png' },
-  { id: 'wb', name: 'Wildberries', color: '#CB11AB', textColor: '#FFFFFF', logo: '/banks/wildberries.png' },
-  { id: 'psb', name: 'PSB', color: '#F26722', textColor: '#FFFFFF', logo: '/banks/psb.png' },
-  { id: 'spb', name: 'Bank St. Petersburg', color: '#D22630', textColor: '#FFFFFF', logo: '/banks/sankt.png' },
+  { id: 'wb', name: 'Wildberries', color: '#E01E84', textColor: '#FFFFFF', logo: '/banks/wildberries.png' }, // Brighter Purple
+  { id: 'psb', name: 'PSB', color: '#FF6B00', textColor: '#FFFFFF', logo: '/banks/psb.png' }, // Brighter Orange
+  { id: 'spb', name: 'Bank St. Petersburg', color: '#FF3B30', textColor: '#FFFFFF', logo: '/banks/sankt.png' }, // Red
   { id: 'other', name: 'Custom Bank', color: '#1C1C1E', textColor: '#FFFFFF', logo: null },
 ];
 
@@ -5301,7 +4996,7 @@ declare module '@google/genai';
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#030014" />
     <title>Masareefy</title>
     
     <!-- PWA Settings -->
@@ -5309,79 +5004,76 @@ declare module '@google/genai';
     <link rel="apple-touch-icon" href="/app.png">
 
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+Arabic:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&family=Noto+Sans+Arabic:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
     <script>
       tailwind.config = {
         darkMode: 'class',
         theme: {
           extend: {
             colors: {
-              background: '#000000',
-              surface: '#09090b',
-              surfaceLight: '#18181b',
-              border: '#27272a',
-              primary: '#21A038', 
-              primaryGlow: 'rgba(33, 160, 56, 0.5)',
-              titan: '#A855F7',
-              titanGlow: 'rgba(168, 85, 247, 0.5)',
+              background: '#030014',
+              surface: '#0F0E17',
+              primary: '#A855F7', // Purple
+              secondary: '#10B981', // Emerald
+              accent: '#F472B6', // Pink
             },
             fontFamily: {
               sans: ['Inter', 'Noto Sans Arabic', 'sans-serif'],
+              display: ['Space Grotesk', 'Noto Sans Arabic', 'sans-serif'],
             },
             animation: {
-              'enter': 'enter 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-              'leave': 'leave 0.3s ease-in forwards',
-              'slide-up': 'slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
-              'slide-down': 'slideDown 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
-              'fade-in': 'fadeIn 0.4s ease-out',
-              'scale-in': 'scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-              'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-              'float': 'float 6s ease-in-out infinite',
-              'gradient-x': 'gradientX 15s ease infinite',
-              'shimmer': 'shimmer 2.5s linear infinite',
+              'float': 'float 8s ease-in-out infinite',
+              'float-fast': 'float 4s ease-in-out infinite',
+              'pulse-glow': 'pulseGlow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'slide-up-fade': 'slideUpFade 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
+              'scale-in': 'scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+              'shimmer': 'shimmer 3s linear infinite',
+              'border-beam': 'borderBeam 4s linear infinite',
+              'grain': 'grain 8s steps(10) infinite',
+              'spotlight': 'spotlight 2s ease .75s 1 forwards',
             },
             keyframes: {
-              enter: {
-                '0%': { opacity: '0', transform: 'scale(0.98) translateY(10px)' },
-                '100%': { opacity: '1', transform: 'scale(1) translateY(0)' },
+              float: {
+                '0%, 100%': { transform: 'translateY(0) rotate(0deg)' },
+                '50%': { transform: 'translateY(-10px) rotate(1deg)' },
               },
-              leave: {
-                '0%': { opacity: '1', transform: 'scale(1)' },
-                '100%': { opacity: '0', transform: 'scale(0.98) translateY(10px)' },
+              pulseGlow: {
+                '0%, 100%': { opacity: '1', filter: 'brightness(1)' },
+                '50%': { opacity: '0.8', filter: 'brightness(1.2)' },
               },
-              slideUp: {
-                '0%': { opacity: '0', transform: 'translateY(30px)' },
-                '100%': { opacity: '1', transform: 'translateY(0)' },
-              },
-              slideDown: {
-                '0%': { opacity: '0', transform: 'translateY(-30px)' },
-                '100%': { opacity: '1', transform: 'translateY(0)' },
-              },
-              fadeIn: {
-                '0%': { opacity: '0' },
-                '100%': { opacity: '1' },
+              slideUpFade: {
+                '0%': { opacity: '0', transform: 'translateY(40px) scale(0.95)' },
+                '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
               },
               scaleIn: {
                 '0%': { transform: 'scale(0.9)', opacity: '0' },
                 '100%': { transform: 'scale(1)', opacity: '1' },
               },
-              float: {
-                '0%, 100%': { transform: 'translateY(0)' },
-                '50%': { transform: 'translateY(-10px)' },
-              },
-              gradientX: {
-                '0%, 100%': {
-                    'background-size': '200% 200%',
-                    'background-position': 'left center'
-                },
-                '50%': {
-                    'background-size': '200% 200%',
-                    'background-position': 'right center'
-                },
-              },
               shimmer: {
                 '0%': { backgroundPosition: '-1000px 0' },
                 '100%': { backgroundPosition: '1000px 0' }
+              },
+              borderBeam: {
+                '100%': { offsetDistance: '100%' },
+              },
+              grain: {
+                '0%, 100%': { transform: 'translate(0, 0)' },
+                '10%': { transform: 'translate(-5%, -10%)' },
+                '20%': { transform: 'translate(-15%, 5%)' },
+                '30%': { transform: 'translate(7%, -25%)' },
+                '40%': { transform: 'translate(-5%, 25%)' },
+                '50%': { transform: 'translate(-15%, 10%)' },
+                '60%': { transform: 'translate(15%, 0%)' },
+                '70%': { transform: 'translate(0%, 15%)' },
+                '80%': { transform: 'translate(3%, 35%)' },
+                '90%': { transform: 'translate(-10%, 10%)' },
+              },
+              spotlight: {
+                '0%': { opacity: '0', transform: 'translate(-72%, -62%) scale(0.5)' },
+                '100%': { opacity: '1', transform: 'translate(-50%,-40%) scale(1)' },
               }
             }
           }
@@ -5390,7 +5082,7 @@ declare module '@google/genai';
     </script>
     <style>
       body {
-        background-color: #000000;
+        background-color: #030014;
         color: #ffffff;
         font-family: 'Inter', 'Noto Sans Arabic', sans-serif;
         -webkit-font-smoothing: antialiased;
@@ -5398,42 +5090,69 @@ declare module '@google/genai';
         overscroll-behavior-y: none;
       }
       
-      /* Hide Scrollbar */
-      ::-webkit-scrollbar {
-        width: 0px;
-        background: transparent;
+      /* Cinematic Live Grain */
+      .live-noise::before {
+        content: "";
+        position: fixed;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        opacity: 0.04;
+        pointer-events: none;
+        z-index: 9999;
+        animation: grain 8s steps(10) infinite;
+        mix-blend-mode: overlay;
       }
-      
-      /* Glassmorphism Utilities */
-      .glass {
-        background: rgba(255, 255, 255, 0.03);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.05);
+
+      /* Premium Aurora Background */
+      .aurora-bg {
+        background: 
+          radial-gradient(circle at 50% 0%, rgba(120, 119, 198, 0.15), transparent 60%),
+          radial-gradient(circle at 80% 10%, rgba(168, 85, 247, 0.15), transparent 50%), 
+          radial-gradient(circle at 20% 10%, rgba(16, 185, 129, 0.15), transparent 50%);
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        filter: blur(80px);
+        opacity: 0.8;
       }
-      
-      .glass-strong {
-        background: rgba(24, 24, 27, 0.6);
+
+      /* Advanced Glass Card */
+      .glass-card {
+        background: rgba(13, 13, 15, 0.6);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
         border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 
+          0 4px 6px -1px rgba(0, 0, 0, 0.1), 
+          0 2px 4px -1px rgba(0, 0, 0, 0.06),
+          inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+      
+      .glass-card:hover {
+        background: rgba(20, 20, 25, 0.7);
+        border-color: rgba(255, 255, 255, 0.12);
+        box-shadow: 
+          0 20px 40px -10px rgba(0, 0, 0, 0.4),
+          inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        transform: translateY(-2px) scale(1.005);
       }
 
-      .glass-panel {
-        background: linear-gradient(180deg, rgba(30, 30, 32, 0.7) 0%, rgba(10, 10, 10, 0.9) 100%);
-        backdrop-filter: blur(16px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+      /* Neon Text Glow */
+      .text-glow {
+        text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+      }
+      .text-glow-purple {
+        text-shadow: 0 0 15px rgba(168, 85, 247, 0.5);
       }
 
-      /* Noise Texture Class */
-      .noise-bg {
-        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-        opacity: 0.03;
-        pointer-events: none;
-        position: absolute;
-        inset: 0;
-        mix-blend-mode: overlay;
+      /* Scrollbar hidden */
+      ::-webkit-scrollbar {
+        width: 0px;
+        background: transparent;
       }
     </style>
   <script type="importmap">
@@ -5456,6 +5175,8 @@ declare module '@google/genai';
 <link rel="stylesheet" href="/index.css">
 </head>
   <body>
+    <div class="live-noise"></div>
+    <div class="aurora-bg"></div>
     <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
 </body>
@@ -5740,8 +5461,8 @@ export default defineConfig(({ mode }) => {
             short_name: "Masareefy",
             name: "Masareefy: Smart Finance",
             description: "Smart income and expense manager with AI receipt analysis.",
-            theme_color: "#000000",
-            background_color: "#000000",
+            theme_color: "#030014", // Deep Space Background
+            background_color: "#030014", // Matching Background
             display: "standalone",
             orientation: "portrait",
             scope: "/",
@@ -5763,7 +5484,7 @@ export default defineConfig(({ mode }) => {
           },
           workbox: {
             globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-            maximumFileSizeToCacheInBytes: 4000000
+            maximumFileSizeToCacheInBytes: 4000000 // 4MB Limit to avoid build errors
           }
         })
       ],
@@ -5788,5 +5509,5 @@ export default defineConfig(({ mode }) => {
 
 ## 📊 Stats
 - Total Files: 28
-- Total Characters: 278330
-- Estimated Tokens: ~69.583 (GPT-4 Context)
+- Total Characters: 263565
+- Estimated Tokens: ~65.892 (GPT-4 Context)

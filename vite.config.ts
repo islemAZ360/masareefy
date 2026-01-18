@@ -19,8 +19,8 @@ export default defineConfig(({ mode }) => {
             short_name: "Masareefy",
             name: "Masareefy: Smart Finance",
             description: "Smart income and expense manager with AI receipt analysis.",
-            theme_color: "#000000",
-            background_color: "#000000",
+            theme_color: "#030014", // Deep Space Background
+            background_color: "#030014", // Matching Background
             display: "standalone",
             orientation: "portrait",
             scope: "/",
@@ -42,7 +42,7 @@ export default defineConfig(({ mode }) => {
           },
           workbox: {
             globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-            maximumFileSizeToCacheInBytes: 4000000
+            maximumFileSizeToCacheInBytes: 4000000 // 4MB Limit to avoid build errors
           }
         })
       ],
