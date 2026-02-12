@@ -13,7 +13,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&family=Noto+Sans+Arabic:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- LOAD NEW FONTS: IBM Plex Sans Arabic (Text) + Tajawal (Display) -->
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
     
     <script>
       tailwind.config = {
@@ -28,21 +30,25 @@
               accent: '#F472B6',
             },
             fontFamily: {
-              sans: ['Inter', 'Noto Sans Arabic', 'sans-serif'],
-              display: ['Space Grotesk', 'Noto Sans Arabic', 'sans-serif'],
+              // Updated Font Stacks
+              sans: ['Inter', 'IBM Plex Sans Arabic', 'sans-serif'], 
+              display: ['Space Grotesk', 'Tajawal', 'sans-serif'],
             },
             animation: {
               'float': 'float 8s ease-in-out infinite',
+              'float-fast': 'float 4s ease-in-out infinite',
               'pulse-glow': 'pulseGlow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
               'slide-up-fade': 'slideUpFade 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
               'scale-in': 'scaleIn 0.2s ease-out',
               'shimmer': 'shimmer 2.5s linear infinite',
+              'border-beam': 'borderBeam 4s linear infinite',
               'grain': 'grain 8s steps(10) infinite',
+              'spotlight': 'spotlight 2s ease .75s 1 forwards',
             },
             keyframes: {
               float: {
-                '0%, 100%': { transform: 'translateY(0)' },
-                '50%': { transform: 'translateY(-10px)' },
+                '0%, 100%': { transform: 'translateY(0) rotate(0deg)' },
+                '50%': { transform: 'translateY(-10px) rotate(1deg)' },
               },
               pulseGlow: {
                 '0%, 100%': { opacity: '1', filter: 'brightness(1)' },
@@ -60,6 +66,9 @@
                 '0%': { backgroundPosition: '-1000px 0' },
                 '100%': { backgroundPosition: '1000px 0' }
               },
+              borderBeam: {
+                '100%': { offsetDistance: '100%' },
+              },
               grain: {
                 '0%, 100%': { transform: 'translate(0, 0)' },
                 '10%': { transform: 'translate(-5%, -10%)' },
@@ -71,6 +80,10 @@
                 '70%': { transform: 'translate(0%, 15%)' },
                 '80%': { transform: 'translate(3%, 35%)' },
                 '90%': { transform: 'translate(-10%, 10%)' },
+              },
+              spotlight: {
+                '0%': { opacity: '0', transform: 'translate(-72%, -62%) scale(0.5)' },
+                '100%': { opacity: '1', transform: 'translate(-50%,-40%) scale(1)' },
               }
             }
           }
@@ -81,21 +94,19 @@
       body {
         background-color: #030014;
         color: #ffffff;
-        font-family: 'Inter', 'Noto Sans Arabic', sans-serif;
+        font-family: 'Inter', 'IBM Plex Sans Arabic', sans-serif;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         overscroll-behavior-y: none;
-        -webkit-tap-highlight-color: transparent; /* Remove tap flash on mobile */
+        -webkit-tap-highlight-color: transparent;
       }
       
-      /* Optimized Performance Classes */
       .gpu-accelerated {
         transform: translate3d(0, 0, 0);
         backface-visibility: hidden;
         perspective: 1000px;
       }
 
-      /* Lightweight Noise (PNG Base64) - Zero lag compared to SVG filters */
       .live-noise::before {
         content: "";
         position: fixed;
@@ -109,10 +120,9 @@
         pointer-events: none;
         z-index: 9999;
         animation: grain 8s steps(10) infinite;
-        will-change: transform; /* Hint to browser */
+        will-change: transform;
       }
 
-      /* High Performance Aurora */
       .aurora-bg {
         background: 
           radial-gradient(circle at 50% 0%, rgba(120, 119, 198, 0.1), transparent 60%),
@@ -121,27 +131,25 @@
         position: fixed;
         inset: 0;
         z-index: -1;
-        filter: blur(60px); /* Reduced blur radius for performance */
+        filter: blur(60px);
         opacity: 0.8;
-        transform: translate3d(0, 0, 0); /* Force GPU */
+        transform: translate3d(0, 0, 0);
       }
 
-      /* Optimized Glass Card */
       .glass-card {
         background: rgba(13, 13, 15, 0.6);
-        backdrop-filter: blur(12px); /* Reduced blur for performance */
+        backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
         border: 1px solid rgba(255, 255, 255, 0.08);
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.2s ease;
-        will-change: transform; /* Hint to browser */
+        will-change: transform;
       }
       
       .glass-card:active {
         transform: scale(0.98);
       }
 
-      /* Neon Text Glow - Simplified */
       .text-glow {
         text-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
       }
@@ -172,7 +180,7 @@
 </head>
   <body>
     <div class="live-noise"></div>
-    <div class="aurora-bg"></div>
+    <div class="aurora-gradient"></div>
     <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
 </body>

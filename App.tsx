@@ -34,7 +34,7 @@ const App = () => {
     try {
       const saved = localStorage.getItem('masareefy_user');
       const parsed = saved ? JSON.parse(saved) : null;
-      
+
       const defaultSettings: UserSettings = {
         name: '',
         apiKey: '',
@@ -54,12 +54,13 @@ const App = () => {
         salaryInterval: 30,
         // New Features Initialization
         savingsGoals: [],
-        debts: []
+        debts: [],
+        isAIMode: true // Default to true, will auto-disable if no key later
       };
 
       if (parsed) {
-          // Merge parsed data with defaults to ensure new fields (goals, debts) exist for old users
-          return { ...defaultSettings, ...parsed };
+        // Merge parsed data with defaults to ensure new fields (goals, debts) exist for old users
+        return { ...defaultSettings, ...parsed };
       }
       return defaultSettings;
 
@@ -82,7 +83,8 @@ const App = () => {
         lastSalaryDate: undefined,
         salaryInterval: 30,
         savingsGoals: [],
-        debts: []
+        debts: [],
+        isAIMode: false
       };
     }
   });
@@ -102,14 +104,14 @@ const App = () => {
   useEffect(() => {
     localStorage.setItem('masareefy_user', JSON.stringify(user));
     if (user.isOnboarded && !user.isGuest && auth.currentUser) {
-        saveUserData(auth.currentUser.uid, user, transactions);
+      saveUserData(auth.currentUser.uid, user, transactions);
     }
   }, [user]);
 
   useEffect(() => {
     localStorage.setItem('masareefy_txs', JSON.stringify(transactions));
     if (user.isOnboarded && !user.isGuest && auth.currentUser) {
-        saveUserData(auth.currentUser.uid, user, transactions);
+      saveUserData(auth.currentUser.uid, user, transactions);
     }
   }, [transactions]);
 
@@ -122,19 +124,22 @@ const App = () => {
   // --- Logic Handlers ---
 
   const handleRestoreData = (settings: UserSettings, txs: Transaction[]) => {
-     setUser(settings);
-     setTransactions(txs);
-     setCurrentView('dashboard');
+    // Ensure backward compatibility
+    if (settings.isAIMode === undefined) settings.isAIMode = !!settings.apiKey;
+
+    setUser(settings);
+    setTransactions(txs);
+    setCurrentView('dashboard');
   };
 
   const handleOnboardingComplete = (
-      result: OnboardingAnalysisResult, 
-      nextSalaryDate: string, 
-      nextSalaryAmount: number, 
-      bills: RecurringBill[],
-      savingsBalance: number,
-      spendingBank: { name: string, color: string, textColor: string },
-      savingsBank: { name: string, color: string, textColor: string }
+    result: OnboardingAnalysisResult,
+    nextSalaryDate: string,
+    nextSalaryAmount: number,
+    bills: RecurringBill[],
+    savingsBalance: number,
+    spendingBank: { name: string, color: string, textColor: string },
+    savingsBank: { name: string, color: string, textColor: string }
   ) => {
     const newTransactions = result.transactions.map((tx, idx) => ({
       id: `init-${idx}`,
@@ -159,16 +164,16 @@ const App = () => {
     });
 
     if (savingsBalance > 0) {
-        newTransactions.push({
-            id: 'init-savings',
-            amount: savingsBalance,
-            date: new Date().toISOString().split('T')[0],
-            vendor: 'Initial Savings',
-            category: 'salary',
-            type: TransactionType.INCOME,
-            wallet: 'savings' as WalletType,
-            note: 'Initial Balance'
-        });
+      newTransactions.push({
+        id: 'init-savings',
+        amount: savingsBalance,
+        date: new Date().toISOString().split('T')[0],
+        vendor: 'Initial Savings',
+        category: 'salary',
+        type: TransactionType.INCOME,
+        wallet: 'savings' as WalletType,
+        note: 'Initial Balance'
+      });
     }
 
     const newUserSettings: UserSettings = {
@@ -187,7 +192,8 @@ const App = () => {
       nextSalaryDate: nextSalaryDate,
       recurringBills: bills,
       savingsGoals: [],
-      debts: []
+      debts: [],
+      isAIMode: true
     };
 
     setTransactions(newTransactions);
@@ -195,7 +201,7 @@ const App = () => {
     setCurrentView('dashboard');
 
     if (auth.currentUser) {
-        saveUserData(auth.currentUser.uid, newUserSettings, newTransactions);
+      saveUserData(auth.currentUser.uid, newUserSettings, newTransactions);
     }
   };
 
@@ -205,121 +211,121 @@ const App = () => {
   };
 
   const handleUpdateBankName = (wallet: WalletType, newName: string) => {
-      setUser(prev => ({
-          ...prev,
-          [wallet === 'spending' ? 'spendingBankName' : 'savingsBankName']: newName
-      }));
+    setUser(prev => ({
+      ...prev,
+      [wallet === 'spending' ? 'spendingBankName' : 'savingsBankName']: newName
+    }));
   };
 
   const handlePayBill = (billId: string, date: string, deduct: boolean) => {
     const bill = user.recurringBills?.find(b => b.id === billId);
     if (!bill) return;
 
-    const updatedBills = user.recurringBills?.map(b => 
-       b.id === billId ? { ...b, lastPaidDate: date } : b
+    const updatedBills = user.recurringBills?.map(b =>
+      b.id === billId ? { ...b, lastPaidDate: date } : b
     );
     setUser(u => ({ ...u, recurringBills: updatedBills }));
 
     if (deduct) {
-       const newTx: Transaction = {
-          id: `bill-${Date.now()}`,
-          amount: bill.amount,
-          date: date,
-          category: 'utilities',
-          vendor: bill.name,
-          note: 'Fixed Bill',
-          type: TransactionType.EXPENSE,
-          wallet: 'spending',
-          isRecurring: true
-       };
-       setTransactions(prev => [newTx, ...prev]);
-       setUser(prev => ({ ...prev, currentBalance: prev.currentBalance - bill.amount }));
+      const newTx: Transaction = {
+        id: `bill-${Date.now()}`,
+        amount: bill.amount,
+        date: date,
+        category: 'utilities',
+        vendor: bill.name,
+        note: 'Fixed Bill',
+        type: TransactionType.EXPENSE,
+        wallet: 'spending',
+        isRecurring: true
+      };
+      setTransactions(prev => [newTx, ...prev]);
+      setUser(prev => ({ ...prev, currentBalance: prev.currentBalance - bill.amount }));
     }
   };
 
   const handleAddBill = (name: string, amount: number) => {
     const newBill: RecurringBill = { id: Date.now().toString(), name, amount };
     setUser(prev => ({
-        ...prev,
-        recurringBills: [...(prev.recurringBills || []), newBill]
+      ...prev,
+      recurringBills: [...(prev.recurringBills || []), newBill]
     }));
   };
 
   const handleDeleteBill = (id: string) => {
     if (confirm('Delete this bill?')) {
-        setUser(prev => ({
-            ...prev,
-            recurringBills: (prev.recurringBills || []).filter(b => b.id !== id)
-        }));
+      setUser(prev => ({
+        ...prev,
+        recurringBills: (prev.recurringBills || []).filter(b => b.id !== id)
+      }));
     }
   };
 
   const handleLogout = async () => {
-      await logoutUser();
-      localStorage.removeItem('masareefy_user');
-      localStorage.removeItem('masareefy_txs');
-      window.location.reload();
+    await logoutUser();
+    localStorage.removeItem('masareefy_user');
+    localStorage.removeItem('masareefy_txs');
+    window.location.reload();
   };
 
   const handleSaveTransaction = (newTx: Transaction, transferAmount: number = 0) => {
-    
+
     if (transferAmount > 0) {
-        const transferOut: Transaction = {
-            id: `transfer-out-${Date.now()}`,
-            amount: transferAmount,
-            date: newTx.date,
-            category: 'transfer',
-            vendor: 'Transfer to Spending',
-            note: 'Auto-cover deficit',
-            type: TransactionType.EXPENSE,
-            wallet: 'savings'
-        };
-        const transferIn: Transaction = {
-            id: `transfer-in-${Date.now()}`,
-            amount: transferAmount,
-            date: newTx.date,
-            category: 'transfer',
-            vendor: 'From Savings',
-            note: 'Auto-cover deficit',
-            type: TransactionType.INCOME,
-            wallet: 'spending'
-        };
-        
-        setTransactions(prev => [transferIn, transferOut, ...prev]);
-        
-        setUser(prev => ({
-            ...prev,
-            savingsBalance: prev.savingsBalance - transferAmount,
-            currentBalance: prev.currentBalance + transferAmount
-        }));
+      const transferOut: Transaction = {
+        id: `transfer-out-${Date.now()}`,
+        amount: transferAmount,
+        date: newTx.date,
+        category: 'transfer',
+        vendor: 'Transfer to Spending',
+        note: 'Auto-cover deficit',
+        type: TransactionType.EXPENSE,
+        wallet: 'savings'
+      };
+      const transferIn: Transaction = {
+        id: `transfer-in-${Date.now()}`,
+        amount: transferAmount,
+        date: newTx.date,
+        category: 'transfer',
+        vendor: 'From Savings',
+        note: 'Auto-cover deficit',
+        type: TransactionType.INCOME,
+        wallet: 'spending'
+      };
+
+      setTransactions(prev => [transferIn, transferOut, ...prev]);
+
+      setUser(prev => ({
+        ...prev,
+        savingsBalance: prev.savingsBalance - transferAmount,
+        currentBalance: prev.currentBalance + transferAmount
+      }));
     }
 
     setTransactions(prev => [newTx, ...prev]);
 
     setUser(prev => {
-        let newSpending = prev.currentBalance;
-        let newSavings = prev.savingsBalance;
+      let newSpending = prev.currentBalance;
+      let newSavings = prev.savingsBalance;
 
-        if (newTx.wallet === 'spending') {
-            if (newTx.type === TransactionType.INCOME) newSpending += newTx.amount;
-            else newSpending -= newTx.amount;
-        } else {
-            if (newTx.type === TransactionType.INCOME) newSavings += newTx.amount;
-            else newSavings -= newTx.amount;
-        }
+      if (newTx.wallet === 'spending') {
+        if (newTx.type === TransactionType.INCOME) newSpending += newTx.amount;
+        else newSpending -= newTx.amount;
+      } else {
+        if (newTx.type === TransactionType.INCOME) newSavings += newTx.amount;
+        else newSavings -= newTx.amount;
+      }
 
-        let updatedLastSalaryDate = prev.lastSalaryDate;
-        
-        if (newTx.type === TransactionType.INCOME && newTx.wallet === 'spending' && newTx.amount > 100) {
-            updatedLastSalaryDate = newTx.date;
-        }
+      let updatedLastSalaryDate = prev.lastSalaryDate;
 
-        return {
-            ...prev,
-            currentBalance: newSpending,
-            savingsBalance: newSavings,
-            lastSalaryDate: updatedLastSalaryDate
-        };
+      if (newTx.type === TransactionType.INCOME && newTx.wallet === 'spending' && newTx.amount > 100) {
+        updatedLastSalaryDate = newTx.date;
+      }
+
+      return {
+        ...prev,
+        currentBalance: newSpending,
+        savingsBalance: newSavings,
+        lastSalaryDate: updatedLastSalaryDate
+      };
     });
 
     setCurrentView('dashboard');
@@ -332,13 +338,8 @@ const App = () => {
   return (
     // Clean, transparent container allowing global Aurora background to shine through
     <div className="min-h-screen bg-transparent text-white relative overflow-hidden font-sans selection:bg-primary/30 pb-40">
-      
-      {/* Animated Nebula Background (Moved from index.html/App structure for persistence) */}
-      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-          <div className="absolute top-[-10%] left-[-20%] w-[80vw] h-[80vw] bg-purple-900/10 rounded-full blur-[120px] animate-float opacity-30"></div>
-          <div className="absolute bottom-[-10%] right-[-20%] w-[80vw] h-[80vw] bg-emerald-900/10 rounded-full blur-[120px] animate-pulse-slow opacity-30" style={{ animationDelay: '2s' }}></div>
-          <div className="noise-bg"></div>
-      </div>
+
+      {/* Background handled by index.css (.aurora-gradient) */}
 
       {/* Header */}
       {currentView !== 'add' && (
@@ -347,11 +348,11 @@ const App = () => {
             {/* User Profile */}
             <div className="flex items-center gap-3">
               {user.photoURL ? (
-                  <img src={user.photoURL} alt="User" className="w-10 h-10 rounded-2xl shadow-md border border-white/10 object-cover" />
+                <img src={user.photoURL} alt="User" className="w-10 h-10 rounded-2xl shadow-md border border-white/10 object-cover" />
               ) : (
-                  <div className="w-10 h-10 rounded-2xl bg-surface flex items-center justify-center text-sm font-bold shadow-md border border-white/10 font-display">
+                <div className="w-10 h-10 rounded-2xl bg-surface flex items-center justify-center text-sm font-bold shadow-md border border-white/10 font-display">
                   {user.name.charAt(0) || 'U'}
-                  </div>
+                </div>
               )}
               <div className="flex flex-col">
                 <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest leading-none mb-1">{t.welcome}</p>
@@ -364,25 +365,25 @@ const App = () => {
 
             {/* Right Side Actions */}
             <div className="flex items-center gap-3">
-                {/* Titan Simulator Capsule */}
-                <button 
-                  onClick={() => setCurrentView('simulator')}
-                  className="relative group flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1A1A1A] border border-primary/40 shadow-[0_0_15px_rgba(168,85,247,0.3)] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)] hover:border-primary transition-all active:scale-95 overflow-hidden"
-                >
-                    {/* Glowing Pulse Background */}
-                    <div className="absolute inset-0 bg-primary/10 animate-pulse"></div>
-                    
-                    <BrainCircuit size={16} className="text-primary group-hover:text-white transition-colors relative z-10" />
-                    <span className="text-[10px] font-bold text-primary/80 group-hover:text-white uppercase tracking-wider relative z-10 hidden sm:block">Titan</span>
-                </button>
+              {/* Titan Simulator Capsule */}
+              <button
+                onClick={() => setCurrentView('simulator')}
+                className="relative group flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1A1A1A] border border-primary/40 shadow-[0_0_15px_rgba(168,85,247,0.3)] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)] hover:border-primary transition-all active:scale-95 overflow-hidden"
+              >
+                {/* Glowing Pulse Background */}
+                <div className="absolute inset-0 bg-primary/10 animate-pulse"></div>
 
-                {/* Language Switcher */}
-                <button 
-                    onClick={() => setUser(u => ({...u, language: u.language === 'en' ? 'ar' : u.language === 'ar' ? 'ru' : 'en'}))}
-                    className="w-10 h-10 flex items-center justify-center rounded-full glass-card hover:bg-white/10 active:scale-90 transition-all group"
-                >
-                  <Globe className="text-zinc-400 group-hover:text-white w-5 h-5 transition-colors" />
-                </button>
+                <BrainCircuit size={16} className="text-primary group-hover:text-white transition-colors relative z-10" />
+                <span className="text-[10px] font-bold text-primary/80 group-hover:text-white uppercase tracking-wider relative z-10 hidden sm:block">Titan</span>
+              </button>
+
+              {/* Language Switcher */}
+              <button
+                onClick={() => setUser(u => ({ ...u, language: u.language === 'en' ? 'ar' : u.language === 'ar' ? 'ru' : 'en' }))}
+                className="w-10 h-10 flex items-center justify-center rounded-full glass-card hover:bg-white/10 active:scale-90 transition-all group"
+              >
+                <Globe className="text-zinc-400 group-hover:text-white w-5 h-5 transition-colors" />
+              </button>
             </div>
           </div>
         </div>
@@ -392,40 +393,38 @@ const App = () => {
         <div key={currentView} className="animate-slide-up-fade px-4 pt-6">
           <Suspense fallback={<PageLoader />}>
             {currentView === 'dashboard' ? (
-                <Dashboard 
-                user={user} 
-                transactions={transactions} 
-                onSelectPlan={handlePlanSelection} 
+              <Dashboard
+                user={user}
+                transactions={transactions}
+                onSelectPlan={handlePlanSelection}
                 onOpenAI={() => setCurrentView('ai-advisor')}
                 onChangeView={setCurrentView}
                 onPayBill={handlePayBill}
                 onAddBill={handleAddBill}
                 onDeleteBill={handleDeleteBill}
                 onUpdateBankName={handleUpdateBankName}
-                />
-            ) : currentView === 'onboarding' ? (
-                <Onboarding user={user} setUser={setUser} onComplete={handleOnboardingComplete} onRestore={handleRestoreData} />
+              />
             ) : currentView === 'transactions' ? (
-                <TransactionsPage user={user} transactions={transactions} />
+              <TransactionsPage user={user} transactions={transactions} />
             ) : currentView === 'add' ? (
-                <AddTransactionPage 
-                    user={user} 
-                    transactions={transactions} 
-                    onSave={handleSaveTransaction} 
-                    onBack={() => setCurrentView('dashboard')} 
-                />
+              <AddTransactionPage
+                user={user}
+                transactions={transactions}
+                onSave={handleSaveTransaction}
+                onBack={() => setCurrentView('dashboard')}
+              />
             ) : currentView === 'reports' ? (
-                <Reports transactions={transactions} language={user.language} />
+              <Reports transactions={transactions} language={user.language} />
             ) : currentView === 'settings' ? (
-                <SettingsPage user={user} setUser={setUser} onLogout={handleLogout} />
+              <SettingsPage user={user} setUser={setUser} onLogout={handleLogout} />
             ) : currentView === 'ai-advisor' ? (
-                <AIAdvisor user={user} transactions={transactions} onClose={() => setCurrentView('dashboard')} />
+              <AIAdvisor user={user} transactions={transactions} onClose={() => setCurrentView('dashboard')} />
             ) : currentView === 'simulator' ? (
-                <TitanSimulator 
-                user={user} 
-                transactions={transactions} 
-                onBack={() => setCurrentView('dashboard')} 
-                />
+              <TitanSimulator
+                user={user}
+                transactions={transactions}
+                onBack={() => setCurrentView('dashboard')}
+              />
             ) : null}
           </Suspense>
         </div>

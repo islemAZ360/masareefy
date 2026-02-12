@@ -8,6 +8,17 @@ export enum TransactionType {
 
 export type WalletType = 'spending' | 'savings';
 
+// --- View State Definition (Fixed) ---
+export type ViewState =
+  | 'dashboard'
+  | 'transactions'
+  | 'add'
+  | 'reports'
+  | 'settings'
+  | 'onboarding'
+  | 'ai-advisor'
+  | 'simulator';
+
 export interface Transaction {
   id: string;
   amount: number;
@@ -52,9 +63,9 @@ export interface SavingsGoal {
 
 export interface DebtRecord {
   id: string;
-  person: string; // Name of person
+  person: string;
   amount: number;
-  type: 'lent' | 'borrowed'; // 'lent': I gave money (Asset), 'borrowed': I took money (Liability)
+  type: 'lent' | 'borrowed';
   date: string;
   dueDate?: string;
   isPaid: boolean;
@@ -70,34 +81,36 @@ export interface UserSettings {
   language: Language;
   isOnboarded: boolean;
   isGuest?: boolean;
-  
+
   // Financial Context
-  // Spending Wallet Info
   spendingBankName: string;
   spendingBankColor: string;
   spendingTextColor: string;
-  currentBalance: number; 
-  
+  currentBalance: number;
+
   // Savings Wallet Info
   savingsBankName: string;
   savingsBankColor: string;
   savingsTextColor: string;
-  savingsBalance: number; 
-  
+  savingsBalance: number;
+
   // Salary Logic
   lastSalaryDate?: string;
   lastSalaryAmount?: number;
-  salaryInterval?: number; // Days
-  nextSalaryDate?: string; // Calculated
-  
+  salaryInterval?: number;
+  nextSalaryDate?: string;
+
   // Budgeting
   selectedPlan?: PlanType;
   dailyLimit?: number;
   recurringBills?: RecurringBill[];
-  
-  // Advanced Features (New)
+
+  // Advanced Features
   savingsGoals?: SavingsGoal[];
   debts?: DebtRecord[];
+
+  // System
+  isAIMode: boolean;
 }
 
 export interface ExpenseCategory {
@@ -114,7 +127,7 @@ export interface ExpenseCategory {
 export interface TimelinePoint {
   date: string;
   balance: number;
-  event?: string; // e.g., "Salary", "Rent", "Collapse"
+  event?: string;
 }
 
 export interface TitanScenario {
@@ -135,15 +148,13 @@ export interface RiskAlert {
 
 export interface LifeEnergy {
   hoursOfWork: number;
-  daysOfLife: number; // e.g. 0.5 days
-  sacrifice: string; // e.g. "30 cups of coffee"
+  daysOfLife: number;
+  sacrifice: string;
 }
 
 export interface TitanAnalysis {
   scenarios: TitanScenario[];
   risks: RiskAlert[];
   lifeEnergy: LifeEnergy;
-  aiVerdict: string; // The final advice
+  aiVerdict: string;
 }
-
-export type ViewState = 'dashboard' | 'transactions' | 'add' | 'reports' | 'settings' | 'onboarding' | 'ai-advisor' | 'simulator';
